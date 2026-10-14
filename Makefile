@@ -7,7 +7,8 @@ WARNINGS = -std=c11 -Wall -Wextra -Werror -Wpedantic
 PROFILE ?= full
 UNAME_S := $(shell uname -s)
 PLATFORM_CPPFLAGS := $(if $(filter Linux,$(UNAME_S)),-D_GNU_SOURCE,)
-ICONV_LIBS := $(if $(filter Darwin,$(UNAME_S)),-liconv,)
+DARWIN_SDK_PATH := $(if $(filter Darwin,$(UNAME_S)),$(shell xcrun --show-sdk-path 2>/dev/null),)
+ICONV_LIBS := $(if $(DARWIN_SDK_PATH),$(DARWIN_SDK_PATH)/usr/lib/libiconv.tbd,)
 PCRE2_CFLAGS := $(shell pkg-config --cflags libpcre2-8 2>/dev/null)
 PCRE2_LIBS := $(shell pkg-config --libs libpcre2-8 2>/dev/null)
 XML_CFLAGS := $(shell pkg-config --cflags libxml-2.0 2>/dev/null)
@@ -32,8 +33,12 @@ COMMAND_SOURCE = src/cmd/version.c
 DIS_SOURCE = tools/openasp-dis/main.c
 DBG_SOURCES = tools/openasp-dbg/main.c tools/openasp-dbg/debugger.c tools/openasp-dbg/command.c \
 	tools/openasp-dbg/breakpoint.c tools/openasp-dbg/source.c tools/openasp-dbg/format.c
-MYSQL_CFLAGS ?= $(shell pkg-config --cflags libmariadb 2>/dev/null || pkg-config --cflags mysqlclient 2>/dev/null || mysql_config --cflags 2>/dev/null)
-MYSQL_LIBS ?= $(shell pkg-config --libs libmariadb 2>/dev/null || pkg-config --libs mysqlclient 2>/dev/null || mysql_config --libs 2>/dev/null)
+MARIADB_CFLAGS := $(shell pkg-config --cflags libmariadb 2>/dev/null)
+MARIADB_LIBS := $(shell pkg-config --libs libmariadb 2>/dev/null)
+MYSQL_CONFIG_LIBDIR := $(shell mysql_config --variable=pkglibdir 2>/dev/null)
+MYSQL_CONFIG_LIBRARY := $(firstword $(wildcard $(MYSQL_CONFIG_LIBDIR)/libmysqlclient.dylib $(MYSQL_CONFIG_LIBDIR)/libmysqlclient.so))
+MYSQL_CFLAGS ?= $(if $(MARIADB_LIBS),$(MARIADB_CFLAGS),$(if $(MYSQL_CONFIG_LIBRARY),$(shell mysql_config --cflags 2>/dev/null),$(shell pkg-config --cflags mysqlclient 2>/dev/null)))
+MYSQL_LIBS ?= $(if $(MARIADB_LIBS),$(MARIADB_LIBS),$(if $(MYSQL_CONFIG_LIBRARY),$(MYSQL_CONFIG_LIBRARY) -Xlinker -rpath -Xlinker $(MYSQL_CONFIG_LIBDIR),$(shell pkg-config --libs mysqlclient 2>/dev/null)))
 MDB_CFLAGS := $(shell pkg-config --cflags libmdb 2>/dev/null)
 MDB_LIBS := $(shell pkg-config --libs libmdb 2>/dev/null) -lmdbsql
 CORE_SOURCES = src/log/log.c src/memory/memory.c src/memory/arena.c src/memory/allocator.c \
