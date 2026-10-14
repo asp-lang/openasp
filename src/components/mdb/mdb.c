@@ -15,6 +15,7 @@
 #include "mdb.h"
 #include "mdb_write.h"
 #include "mdb_write_ddl.h"
+#include "internal.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -150,6 +151,27 @@ static char *oasp_mdb_copy(const char *text, size_t length) {
         memcpy(copy, text, length);
     copy[length] = '\0';
     return copy;
+}
+
+static char *oasp_mdb_copy_utf8(MdbHandle *mdb, const char *text, size_t length, char **error) {
+    const char *source_charset = mdb_target_charset(mdb);
+    oasp_buffer converted;
+    if (!source_charset || !*source_charset)
+        source_charset = "UTF-8";
+    if (!strcasecmp(source_charset, "UTF-8") || !strcasecmp(source_charset, "UTF8")) {
+        if (oasp_text_is_utf8(text, length))
+            return oasp_mdb_copy(text, length);
+        errno = EILSEQ;
+    } else if (oasp_text_convert(&converted, text, length, source_charset, "UTF-8")) {
+        return converted.data;
+    }
+    if (error && !*error) {
+        const char *message = errno == EILSEQ || errno == EINVAL
+                                  ? "MDB returned text that cannot be converted to UTF-8; verify the database encoding and locale"
+                                  : "out of memory while converting MDB text to UTF-8";
+        *error = oasp_mdb_copy(message, strlen(message));
+    }
+    return NULL;
 }
 
 static char *oasp_mdb_trim_copy(const char *begin, const char *end) {
@@ -808,7 +830,7 @@ static bool oasp_mdb_load_table(const char *path, const char *name, oasp_mdb_tab
         goto done;
     for (size_t i = 0; i < result->column_count; i++) {
         MdbColumn *column = g_ptr_array_index(table->columns, i);
-        result->columns[i].name = oasp_mdb_copy(column->name, strlen(column->name));
+        result->columns[i].name = oasp_mdb_copy_utf8(mdb, column->name, strlen(column->name), error);
         result->columns[i].type = column->col_type;
         bindings[i] = calloc(MDB_BIND_SIZE + 1, 1);
         if (!result->columns[i].name || !bindings[i] || mdb_bind_column(table, (int)i + 1, bindings[i], &lengths[i]) == -1)
@@ -829,7 +851,7 @@ static bool oasp_mdb_load_table(const char *path, const char *name, oasp_mdb_tab
         for (size_t i = 0; i < result->column_count; i++) {
             oasp_mdb_source_cell *cell = &result->cells[(result->row_count - 1) * result->column_count + i];
             size_t length = lengths[i] > 0 ? (size_t)lengths[i] : 0;
-            cell->text = oasp_mdb_copy(bindings[i], length);
+            cell->text = oasp_mdb_copy_utf8(mdb, bindings[i], length, error);
             cell->is_null = lengths[i] <= 0;
             if (!cell->text)
                 goto done;

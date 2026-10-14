@@ -13,6 +13,7 @@
  */
 
 #include "runtime.h"
+#include "internal.h"
 #include "memory.h"
 #include "ast_image.h"
 #include "bytecode.h"
@@ -23,6 +24,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <iconv.h>
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
@@ -42,6 +44,96 @@ static bool oasp_runtime_execute_range(oasp_runtime *runtime, const oasp_stmt *f
 bool oasp_runtime_execute_dynamic(oasp_runtime *runtime, const oasp_block *program);
 static void oasp_runtime_error(oasp_runtime *runtime, int number, const char *description, size_t line);
 static bool oasp_runtime_declare(oasp_runtime *runtime, oasp_slice name, const oasp_value *value, bool constant);
+
+bool oasp_text_is_utf8(const char *data, size_t length) {
+    if (!data && length)
+        return false;
+    const unsigned char *bytes = (const unsigned char *)data;
+    size_t i = 0;
+    while (i < length) {
+        unsigned char first = bytes[i++];
+        if (first <= 0x7f)
+            continue;
+        size_t continuation;
+        if (first >= 0xc2 && first <= 0xdf) {
+            continuation = 1;
+        } else if (first >= 0xe0 && first <= 0xef) {
+            continuation = 2;
+            if (i >= length || (first == 0xe0 && bytes[i] < 0xa0) || (first == 0xed && bytes[i] >= 0xa0))
+                return false;
+        } else if (first >= 0xf0 && first <= 0xf4) {
+            continuation = 3;
+            if (i >= length || (first == 0xf0 && bytes[i] < 0x90) || (first == 0xf4 && bytes[i] >= 0x90))
+                return false;
+        } else {
+            return false;
+        }
+        if (continuation > length - i)
+            return false;
+        for (size_t j = 0; j < continuation; j++)
+            if ((bytes[i++] & 0xc0) != 0x80)
+                return false;
+    }
+    return true;
+}
+
+bool oasp_text_convert(oasp_buffer *output, const char *data, size_t length, const char *from_charset, const char *to_charset) {
+    if (!output || (!data && length) || !from_charset || !*from_charset || !to_charset || !*to_charset) {
+        errno = EINVAL;
+        return false;
+    }
+    memset(output, 0, sizeof(*output));
+    iconv_t converter = iconv_open(to_charset, from_charset);
+    if (converter == (iconv_t)-1)
+        return false;
+    if (!oasp_buffer_init(output, length < SIZE_MAX - 16 ? length + 16 : length)) {
+        iconv_close(converter);
+        errno = ENOMEM;
+        return false;
+    }
+    char *input = (char *)data;
+    size_t input_left = length;
+    bool converted = true;
+    while (input_left) {
+        char chunk[4096];
+        char *cursor = chunk;
+        size_t available = sizeof(chunk);
+        size_t status = iconv(converter, &input, &input_left, &cursor, &available);
+        if (!oasp_buffer_append(output, chunk, sizeof(chunk) - available)) {
+            errno = ENOMEM;
+            converted = false;
+            break;
+        }
+        if (status == (size_t)-1 && errno != E2BIG) {
+            converted = false;
+            break;
+        }
+    }
+    while (converted) {
+        char chunk[32];
+        char *cursor = chunk;
+        size_t available = sizeof(chunk);
+        size_t status = iconv(converter, NULL, NULL, &cursor, &available);
+        if (!oasp_buffer_append(output, chunk, sizeof(chunk) - available)) {
+            errno = ENOMEM;
+            converted = false;
+            break;
+        }
+        if (status != (size_t)-1)
+            break;
+        if (errno != E2BIG) {
+            converted = false;
+            break;
+        }
+    }
+    int saved_error = errno;
+    iconv_close(converter);
+    if (!converted) {
+        oasp_buffer_dispose(output);
+        errno = saved_error;
+    }
+    return converted;
+}
 
 struct oasp_fork_child {
     struct oasp_fork_child *next;
@@ -1140,17 +1232,44 @@ bool oasp_runtime_append_local_slot_values(oasp_runtime *runtime, size_t slot, c
                                                           metadata_arena, suffixes, count, line);
 }
 
-bool oasp_runtime_write_value(oasp_runtime *runtime, const oasp_value *value, size_t line) {
-    char buffer[64];
-    oasp_slice text;
-    if (!runtime || !value || !oasp_value_text(value, buffer, sizeof(buffer), &text))
+static bool oasp_runtime_write_text(oasp_runtime *runtime, const char *data, size_t length, size_t line) {
+    if (!runtime || (!data && length))
         return false;
-    oasp_request_write(runtime->request, text.data, text.length);
+    const char *charset = oasp_request_charset(runtime->request);
+    bool ascii = true;
+    for (size_t i = 0; i < length; i++) {
+        if ((unsigned char)data[i] >= 0x80) {
+            ascii = false;
+            break;
+        }
+    }
+    if (!length || ascii || !charset[0] || !strcasecmp(charset, "utf-8") || !strcasecmp(charset, "utf8")) {
+        oasp_request_write(runtime->request, data, length);
+    } else {
+        oasp_buffer converted;
+        if (!oasp_text_convert(&converted, data, length, "UTF-8", charset)) {
+            const char *description = errno == EILSEQ || errno == EINVAL
+                                          ? "response text is not valid UTF-8 or the charset is unsupported; use UTF-8 internally and a charset supported by iconv"
+                                          : "response charset conversion failed; check available memory and the selected Response.Charset";
+            oasp_runtime_error(runtime, 5, description, line);
+            return false;
+        }
+        oasp_request_write(runtime->request, converted.data, converted.length);
+        oasp_buffer_dispose(&converted);
+    }
     if (oasp_request_failed(runtime->request)) {
         oasp_runtime_error(runtime, 5, oasp_request_error(runtime->request), line);
         return false;
     }
     return true;
+}
+
+bool oasp_runtime_write_value(oasp_runtime *runtime, const oasp_value *value, size_t line) {
+    char buffer[64];
+    oasp_slice text;
+    if (!runtime || !value || !oasp_value_text(value, buffer, sizeof(buffer), &text))
+        return false;
+    return oasp_runtime_write_text(runtime, text.data, text.length, line);
 }
 
 bool oasp_runtime_write_values(oasp_runtime *runtime, const oasp_value *values, size_t count, size_t line) {
@@ -1178,16 +1297,14 @@ bool oasp_runtime_write_htmlencoded_value(oasp_runtime *runtime, const oasp_valu
         if (!escaped)
             continue;
         if (i > start)
-            oasp_request_write(runtime->request, text.data + start, i - start);
-        oasp_request_write(runtime->request, escaped, strlen(escaped));
+            if (!oasp_runtime_write_text(runtime, text.data + start, i - start, line))
+                return false;
+        if (!oasp_runtime_write_text(runtime, escaped, strlen(escaped), line))
+            return false;
         start = i + 1;
     }
     if (start < text.length)
-        oasp_request_write(runtime->request, text.data + start, text.length - start);
-    if (oasp_request_failed(runtime->request)) {
-        oasp_runtime_error(runtime, 5, oasp_request_error(runtime->request), line);
-        return false;
-    }
+        return oasp_runtime_write_text(runtime, text.data + start, text.length - start, line);
     return true;
 }
 

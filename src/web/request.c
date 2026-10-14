@@ -777,7 +777,7 @@ int oasp_request_set_codepage(oasp_request *request, int codepage) {
         charset = "utf-8";
         break;
     case 936:
-        charset = "gb2312";
+        charset = "gbk";
         break;
     case 950:
         charset = "big5";

@@ -138,7 +138,7 @@ static bool oasp_execution_page(oasp_execution_context *context, const oasp_comp
 }
 
 static bool oasp_engine_cache_key(const char *path, bool independent_module, bool debug_info, char output[PATH_MAX + 5]) {
-    int length = snprintf(output, PATH_MAX + 5, "%c:%c:%s", independent_module ? 'M' : 'P',
+    int length = snprintf(output, PATH_MAX + 5, "%c:%c:%s", independent_module ? 'm' : 'p',
                           debug_info ? 'D' : 'N', path);
     return length > 0 && length < PATH_MAX + 5;
 }
@@ -532,24 +532,47 @@ static int oasp_render_with_runtime(oasp_runtime *runtime, const char *source, s
     return result;
 }
 
-static void oasp_apply_page_codepage(oasp_request *request, const char *path) {
+static int oasp_page_codepage(const char *path) {
     FILE *file = fopen(path, "rb");
     if (!file)
-        return;
-    char source[4096];
-    size_t length = fread(source, 1, sizeof(source) - 1, file);
+        return 0;
+    oasp_buffer source;
+    if (!oasp_buffer_init(&source, 4096)) {
+        fclose(file);
+        return 0;
+    }
+    char chunk[4096];
+    size_t length;
+    while ((length = fread(chunk, 1, sizeof(chunk), file)) != 0) {
+        if (!oasp_buffer_append(&source, chunk, length)) {
+            oasp_buffer_dispose(&source);
+            fclose(file);
+            return 0;
+        }
+    }
+    bool read_ok = !ferror(file);
     fclose(file);
-    source[length] = '\0';
-    char *directive = strcasestr(source, "<%@");
-    if (!directive)
-        return;
+    if (!read_ok) {
+        oasp_buffer_dispose(&source);
+        return 0;
+    }
+    int inferred = oasp_text_is_utf8(source.data, source.length) ? 0 : 936;
+    char *directive = strcasestr(source.data, "<%@");
+    if (!directive) {
+        oasp_buffer_dispose(&source);
+        return inferred;
+    }
     char *end = strcasestr(directive + 3, "%>");
-    if (!end)
-        return;
+    if (!end) {
+        oasp_buffer_dispose(&source);
+        return inferred;
+    }
     *end = '\0';
     char *codepage = strcasestr(directive + 3, "codepage");
-    if (!codepage)
-        return;
+    if (!codepage) {
+        oasp_buffer_dispose(&source);
+        return inferred;
+    }
     codepage += 8;
     while (*codepage && (isspace((unsigned char)*codepage) || *codepage == '='))
         codepage++;
@@ -558,9 +581,60 @@ static void oasp_apply_page_codepage(oasp_request *request, const char *path) {
     char *value_end = NULL;
     errno = 0;
     long value = strtol(codepage, &value_end, 10);
-    if (errno || value_end == codepage || value < 0 || value > INT_MAX)
-        return;
-    (void)oasp_request_set_codepage(request, (int)value);
+    if (errno || value_end == codepage || value < 0 || value > INT_MAX) {
+        oasp_buffer_dispose(&source);
+        return inferred;
+    }
+    oasp_buffer_dispose(&source);
+    return (int)value;
+}
+
+static const char *oasp_codepage_charset(int codepage) {
+    switch (codepage) {
+    case 0:
+    case 65001:
+        return "UTF-8";
+    case 936:
+        return "GBK";
+    case 950:
+        return "BIG5";
+    case 932:
+        return "SHIFT_JIS";
+    case 949:
+        return "EUC-KR";
+    case 1252:
+        return "WINDOWS-1252";
+    default:
+        return NULL;
+    }
+}
+
+static void oasp_apply_page_codepage(oasp_request *request, const char *path) {
+    int codepage = oasp_page_codepage(path);
+    if (codepage)
+        (void)oasp_request_set_codepage(request, codepage);
+}
+
+static bool oasp_preprocess_convert_to_utf8(oasp_preprocess_result *preprocessed, const char *path) {
+    int codepage = oasp_page_codepage(path);
+    const char *charset = oasp_codepage_charset(codepage);
+    if (!codepage && oasp_text_is_utf8(preprocessed->output.data, preprocessed->output.length))
+        return true;
+    if (!codepage)
+        charset = "GBK";
+    if (!charset) {
+        fprintf(stderr, "%s: unsupported source codepage %d; convert the page to UTF-8 or use a supported CODEPAGE\n", path, codepage);
+        return false;
+    }
+    oasp_buffer converted;
+    if (!oasp_text_convert(&converted, preprocessed->output.data, preprocessed->output.length, charset, "UTF-8")) {
+        fprintf(stderr, "%s: cannot convert page source from %s to UTF-8: %s; verify the CODEPAGE directive and file encoding\n",
+                path, charset, strerror(errno));
+        return false;
+    }
+    oasp_buffer_dispose(&preprocessed->output);
+    preprocessed->output = converted;
+    return true;
 }
 
 int oasp_render_text(oasp_request *request, const char *source, size_t length, const char *source_name) {
@@ -582,6 +656,10 @@ static int oasp_render_file_runtime(oasp_runtime *runtime, const char *path, con
         oasp_preprocess_dispose(&preprocessed);
         return -1;
     }
+    if (!oasp_preprocess_convert_to_utf8(&preprocessed, path)) {
+        oasp_preprocess_dispose(&preprocessed);
+        return -1;
+    }
     char global_path[PATH_MAX];
     int global_length = snprintf(global_path, sizeof(global_path), "%s/global.asa", oasp_request_root(request));
     if (global_length > 0 && (size_t)global_length < sizeof(global_path) && strcmp(path, global_path)) {
@@ -592,6 +670,11 @@ static int oasp_render_file_runtime(oasp_runtime *runtime, const char *path, con
             if (!oasp_preprocess_file(oasp_request_root(request), global_path, &global)) {
                 fprintf(stderr, "%s:%zu: preprocess error: %s\n", global.error_path[0] ? global.error_path : global_path, global.error_line,
                         global.error ? global.error : "preprocessing failed");
+                oasp_preprocess_dispose(&global);
+                oasp_preprocess_dispose(&preprocessed);
+                return -1;
+            }
+            if (!oasp_preprocess_convert_to_utf8(&global, global_path)) {
                 oasp_preprocess_dispose(&global);
                 oasp_preprocess_dispose(&preprocessed);
                 return -1;
@@ -864,6 +947,10 @@ static bool oasp_engine_module_parseable(void *context, const char *path) {
         oasp_preprocess_dispose(&preprocessed);
         return false;
     }
+    if (!oasp_preprocess_convert_to_utf8(&preprocessed, path)) {
+        oasp_preprocess_dispose(&preprocessed);
+        return false;
+    }
     oasp_buffer script;
     if (!oasp_build_script(preprocessed.output.data, preprocessed.output.length, path, &script)) {
         oasp_preprocess_dispose(&preprocessed);
@@ -903,6 +990,10 @@ static oasp_compiled_page *oasp_engine_compile_cached(oasp_engine *engine, oasp_
     if (!oasp_preprocess_file_hybrid(root, key, oasp_engine_module_parseable, &module_test, &preprocessed)) {
         fprintf(stderr, "%s:%zu: preprocess error: %s\n", preprocessed.error_path[0] ? preprocessed.error_path : key, preprocessed.error_line,
                 preprocessed.error ? preprocessed.error : "preprocessing failed");
+        oasp_preprocess_dispose(&preprocessed);
+        return NULL;
+    }
+    if (!oasp_preprocess_convert_to_utf8(&preprocessed, key)) {
         oasp_preprocess_dispose(&preprocessed);
         return NULL;
     }

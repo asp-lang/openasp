@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "test_harness.h"
 
@@ -74,6 +75,47 @@ int main(void) {
     assert(!strcmp(oasp_request_output(request, &length), "utf-8"));
     assert(!strcmp(oasp_request_content_type(request), "text/plain; charset=utf-8"));
     oasp_request_destroy(request);
+
+    request = oasp_request_create(".", "", "", "GET");
+    assert(request);
+    page = "<%\n"
+           "Response.CodePage = 936\n"
+           "Response.Write \"\xE6\x8A\x80\xE6\x9C\xAF\xE7\xA7\x91\"\n"
+           "%>";
+    assert(oasp_render_text(request, page, strlen(page), "response-gbk.asp") == 0);
+    assert(!memcmp(oasp_request_output(request, &length), "\xBC\xBC\xCA\xF5\xBF\xC6", 6));
+    assert(length == 6);
+    assert(!strcmp(oasp_request_content_type(request), "text/html; charset=gbk"));
+    oasp_request_destroy(request);
+
+    char codepage_path[] = "/tmp/openasp-codepage-XXXXXX";
+    int codepage_fd = mkstemp(codepage_path);
+    assert(codepage_fd >= 0);
+    FILE *codepage_file = fdopen(codepage_fd, "wb");
+    assert(codepage_file);
+    const char codepage_source[] = "<%@ CODEPAGE=936 %><% Response.Write \"\xBC\xBC\xCA\xF5\xBF\xC6\" %>";
+    assert(fwrite(codepage_source, 1, sizeof(codepage_source) - 1, codepage_file) == sizeof(codepage_source) - 1);
+    assert(!fclose(codepage_file));
+    request = oasp_request_create("/tmp", "", "", "GET");
+    assert(request);
+    assert(oasp_render_file(request, codepage_path) == 0);
+    assert(!memcmp(oasp_request_output(request, &length), "\xBC\xBC\xCA\xF5\xBF\xC6", 6));
+    assert(length == 6);
+    oasp_request_destroy(request);
+
+    codepage_file = fopen(codepage_path, "wb");
+    assert(codepage_file);
+    const char inferred_source[] = "<% Response.Write \"\xBC\xBC\xCA\xF5\xBF\xC6\" %>";
+    assert(fwrite(inferred_source, 1, sizeof(inferred_source) - 1, codepage_file) == sizeof(inferred_source) - 1);
+    assert(!fclose(codepage_file));
+    request = oasp_request_create("/tmp", "", "", "GET");
+    assert(request);
+    assert(oasp_render_file(request, codepage_path) == 0);
+    assert(!memcmp(oasp_request_output(request, &length), "\xBC\xBC\xCA\xF5\xBF\xC6", 6));
+    assert(length == 6);
+    assert(!strcmp(oasp_request_content_type(request), "text/html; charset=gbk"));
+    oasp_request_destroy(request);
+    assert(!unlink(codepage_path));
 
     request = oasp_request_create(".", "", "", "GET");
     assert(request);

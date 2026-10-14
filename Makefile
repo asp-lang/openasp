@@ -7,6 +7,7 @@ WARNINGS = -std=c11 -Wall -Wextra -Werror -Wpedantic
 PROFILE ?= full
 UNAME_S := $(shell uname -s)
 PLATFORM_CPPFLAGS := $(if $(filter Linux,$(UNAME_S)),-D_GNU_SOURCE,)
+ICONV_LIBS := $(if $(filter Darwin,$(UNAME_S)),-liconv,)
 PCRE2_CFLAGS := $(shell pkg-config --cflags libpcre2-8 2>/dev/null)
 PCRE2_LIBS := $(shell pkg-config --libs libpcre2-8 2>/dev/null)
 XML_CFLAGS := $(shell pkg-config --cflags libxml-2.0 2>/dev/null)
@@ -48,7 +49,7 @@ endif
 
 ifeq ($(PROFILE),full)
 CPPFLAGS = -Iinclude $(SOURCE_CPPFLAGS) $(PCRE2_CFLAGS) $(XML_CFLAGS) $(CURL_CFLAGS) $(SQLITE_CFLAGS) $(JSON_CFLAGS) $(OPENSSL_CFLAGS) $(MYSQL_CFLAGS) $(MDB_CFLAGS)
-LDLIBS = -lm $(PCRE2_LIBS) $(XML_LIBS) $(CURL_LIBS) $(SQLITE_LIBS) $(JSON_LIBS) $(OPENSSL_LIBS) $(MYSQL_LIBS) $(MDB_LIBS) $(if $(filter Linux,$(UNAME_S)),-ldl)
+LDLIBS = -lm $(ICONV_LIBS) $(PCRE2_LIBS) $(XML_LIBS) $(CURL_LIBS) $(SQLITE_LIBS) $(JSON_LIBS) $(OPENSSL_LIBS) $(MYSQL_LIBS) $(MDB_LIBS) $(if $(filter Linux,$(UNAME_S)),-ldl)
 COMPONENT_SOURCES = src/components/mdb/mdb.c src/components/mdb/mdb_write_lock.c src/components/mdb/mdb_write_ddl.c \
 	src/components/mdb/mdb_write.c src/components/external/ext_loader.c src/components/external/ext_manifest.c \
 	src/components/external/ext_isolated_proxy.c src/components/external/ext_host_api.c \
@@ -63,7 +64,7 @@ src/components/builtin/xml.c src/components/builtin/json.c src/components/builti
 BUILD ?= build
 else ifeq ($(PROFILE),minimal)
 CPPFLAGS = -Iinclude $(SOURCE_CPPFLAGS) -DOASP_PROFILE_MINIMAL=1 $(SQLITE_CFLAGS) $(JSON_CFLAGS)
-LDLIBS = -lm $(SQLITE_LIBS) $(JSON_LIBS)
+LDLIBS = -lm $(ICONV_LIBS) $(SQLITE_LIBS) $(JSON_LIBS)
 COMPONENT_SOURCES = src/components/component_minimal.c
 BUILD ?= build/minimal
 else

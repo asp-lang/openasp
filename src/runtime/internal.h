@@ -55,6 +55,13 @@ bool oasp_buffer_append(oasp_buffer *buffer, const void *data, size_t length);
 bool oasp_buffer_append_byte(oasp_buffer *buffer, char value);
 void oasp_buffer_dispose(oasp_buffer *buffer);
 
+/*
+ * Converts bounded text through iconv into a NUL-terminated buffer. The
+ * terminator is not included in `output->length`; errno describes failures.
+ */
+bool oasp_text_is_utf8(const char *data, size_t length);
+bool oasp_text_convert(oasp_buffer *output, const char *data, size_t length, const char *from_charset, const char *to_charset);
+
 /* Copies or lowercases an explicit byte range into NUL-terminated arena storage. */
 char *oasp_arena_copy(oasp_arena *arena, const char *data, size_t length);
 char *oasp_arena_lower(oasp_arena *arena, const char *data, size_t length);
