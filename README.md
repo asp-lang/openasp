@@ -386,14 +386,6 @@ ASP templates and includes are parsed and compiled into validated bytecode. Stan
 | `tools/` | Disassembler and debugger |
 | `tests/` | Unit, integration, conformance, e2e, stress, and benchmarks |
 
-Further reading:
-
-- [Source module map](src/README.md)
-- [Test directory and commands](tests/README.md)
-- [Service GC design](docs/service-gc-design.md)
-- [Native extension SDK](docs/extensions.md)
-- [ASP conformance matrix](tests/conformance/ASP_TEST_MATRIX.md)
-
 ## Security
 
 `OpenASP.Process` and `Shell.Application` are disabled by default. Do not enable them for untrusted sites. External extensions are administrator allow-listed, and FastCGI applies request, body, response, header, timeout, and memory limits. API keys and database credentials should be supplied by the deployment environment, not committed to ASP source.

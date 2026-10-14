@@ -383,14 +383,6 @@ ASP 模板和 include 会被解析并编译为经过校验的字节码。独立�
 | `tools/` | 反汇编器和调试器 |
 | `tests/` | 单测、集成、兼容、端到端、压力和基准测试 |
 
-延伸阅读：
-
-- [源码模块说明](src/README.zh-CN.md)
-- [测试目录与命令](tests/README.zh-CN.md)
-- [Service GC 设计](docs/service-gc-design.zh-CN.md)
-- [原生扩展 SDK](docs/extensions.zh-CN.md)
-- [ASP 兼容性测试矩阵](tests/conformance/ASP_TEST_MATRIX.zh-CN.md)
-
 ## 安全
 
 `OpenASP.Process` 和 `Shell.Application` 默认关闭，不应为不可信站点启用。外部扩展必须由管理员加入 allow-list；FastCGI 默认限制请求参数、请求体、响应、Header、超时和内存。API Key 与数据库凭据应通过部署环境提供，不应提交到 ASP 源码中。
