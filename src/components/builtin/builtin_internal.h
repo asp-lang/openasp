@@ -83,10 +83,10 @@ bool oasp_builtin_socket_set(oasp_runtime *runtime, oasp_object *object, oasp_sl
 bool oasp_builtin_socket_call(oasp_runtime *runtime, oasp_object *object, oasp_slice member, oasp_value *arguments, size_t argument_count,
                               size_t line, oasp_value *result);
 void oasp_builtin_websocket_finalize(void *context);
-bool oasp_builtin_websocket_connect(oasp_runtime *runtime, oasp_websocket *websocket, const char *url, const char *subprotocol);
-bool oasp_builtin_websocket_accept(oasp_runtime *runtime, oasp_websocket *websocket, oasp_socket *accepted, const char *subprotocol);
-bool oasp_builtin_websocket_frame(oasp_websocket *websocket, int opcode, const unsigned char *payload, size_t length);
-bool oasp_builtin_websocket_receive(oasp_runtime *runtime, oasp_websocket *websocket, oasp_value *result);
+bool oasp_builtin_websocket_get(oasp_object *object, oasp_slice member, oasp_value *result);
+bool oasp_builtin_websocket_set(oasp_runtime *runtime, oasp_object *object, oasp_slice member, const oasp_value *value, size_t line);
+bool oasp_builtin_websocket_call(oasp_runtime *runtime, oasp_object *object, oasp_slice member, oasp_value *arguments, size_t argument_count,
+                                 size_t line, oasp_value *result);
 void oasp_builtin_redis_finalize(void *context);
 bool oasp_builtin_redis_call(oasp_runtime *runtime, oasp_object *object, oasp_slice member, oasp_value *arguments, size_t argument_count,
                              size_t line, oasp_value *result);

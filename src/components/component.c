@@ -27,6 +27,7 @@ static bool component_get_properties(oasp_runtime *runtime, oasp_object *object,
         oasp_builtin_process_get(object, member, result) ||
         oasp_builtin_redis_get_property(object, member, result) ||
         oasp_builtin_memcache_get_property(object, member, result) ||
+        oasp_builtin_websocket_get(object, member, result) ||
         oasp_builtin_socket_get(runtime, object, member, result))
         return true;
     if (object->component_kind == OASP_COMPONENT_HTTP) {
@@ -123,6 +124,7 @@ bool oasp_builtin_component_set(oasp_runtime *runtime, oasp_object *object, oasp
         oasp_builtin_ado_set(runtime, object, member, value, line) ||
         oasp_builtin_http_set(runtime, object, member, value, line) ||
         oasp_builtin_process_set(runtime, object, member, value, line) ||
+        oasp_builtin_websocket_set(runtime, object, member, value, line) ||
         oasp_builtin_socket_set(runtime, object, member, value, line) ||
         oasp_builtin_memcache_set(runtime, object, member, value, line) ||
         oasp_builtin_redis_set(runtime, object, member, value, line))
@@ -150,7 +152,9 @@ bool oasp_builtin_component_call_id(oasp_runtime *runtime, oasp_object *object, 
          oasp_builtin_shell_call(runtime, object, member, arguments, argument_count, line, result)) ||
         (object->component_kind == OASP_COMPONENT_PROCESS &&
          oasp_builtin_process_call(runtime, object, member, arguments, argument_count, line, result)) ||
-        ((object->component_kind == OASP_COMPONENT_SOCKET || object->component_kind == OASP_COMPONENT_WEBSOCKET) &&
+        (object->component_kind == OASP_COMPONENT_WEBSOCKET &&
+         oasp_builtin_websocket_call(runtime, object, member, arguments, argument_count, line, result)) ||
+        (object->component_kind == OASP_COMPONENT_SOCKET &&
          oasp_builtin_socket_call(runtime, object, member, arguments, argument_count, line, result)) ||
         (object->component_kind == OASP_COMPONENT_MEMCACHE &&
          oasp_builtin_memcache_call(runtime, object, member, arguments, argument_count, line, result)) ||
