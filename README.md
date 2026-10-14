@@ -45,8 +45,8 @@ OpenASP release archives use the following names:
 
 | Platform | Archive |
 | --- | --- |
-| Linux x86-64 | `openasp-0.1.0-linux-x86-64.tar.gz` |
-| macOS Apple Silicon | `openasp-0.1.0-macos-arm64.zip` |
+| Linux x86-64 | [`openasp-0.1.0-linux-x86-64.tar.gz`](https://github.com/asp-lang/openasp/releases/download/v-0.1.0/openasp-0.1.0-linux-x86-64.tar.gz) |
+| macOS Apple Silicon | [`openasp-0.1.0-macos-arm64.zip`](https://github.com/asp-lang/openasp/releases/download/v-0.1.0/openasp-0.1.0-macos-arm64.zip) |
 
 Download the matching archive from the project release page or [https://asp-lang.org](https://asp-lang.org), then extract it:
 
