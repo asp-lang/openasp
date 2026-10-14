@@ -1,0 +1,80 @@
+# Copyright (c) 2026 https://asp-lang.org
+# SPDX-License-Identifier: MIT
+#
+# Complete openasp-fpm configuration example.
+# Command-line options override these values. Empty values do not override the
+# built-in defaults. All keys must remain top-level scalar `key: value` pairs.
+
+# ASP document root. Built-in default: current working directory.
+root: /var/www/openasp
+
+# TCP listener. Use either host/port or unix-socket, not both.
+host: 127.0.0.1
+port: 9000
+# unix-socket: /run/openasp/openasp-fpm.sock
+
+# Stop the complete server after this many accepted connections. Zero means no
+# global connection limit and is useful for long-running production services.
+max-accepts: 0
+
+# Recycle each worker after this many requests. Zero disables request-based
+# recycling; the production default limits long-lived native fragmentation.
+max-requests: 10000
+
+# Ask an idle worker to release allocator pages after this many milliseconds.
+# Zero disables time-based idle relief.
+memory-idle-ms: 30000
+
+# Also release allocator pressure every N requests. Zero disables this trigger.
+memory-relief-requests: 64
+
+# Number of synchronous worker processes. The hard limit is 256.
+workers: 4
+
+# FastCGI protocol and request limits, expressed in bytes or milliseconds.
+max-params-bytes: 1048576
+max-body-bytes: 67108864
+max-request-bytes: 68157440
+client-timeout-ms: 30000
+request-timeout-ms: 30000
+
+# PHP-compatible per-request memory budget. It covers request-owned arenas,
+# managed GC objects, buffered responses, and explicitly tracked native memory.
+# Use -1 for unlimited; shared opcache and persistent worker state are excluded.
+memory-limit: 128M
+
+max-buffered-response-bytes: 67108864
+max-response-header-bytes: 65536
+max-response-headers: 256
+
+# Shared compiled-module cache capacity is in MiB. The directory must be
+# writable by the FPM account.
+opcache-memory: 64
+opcache-dir: /var/cache/openasp
+
+# `on` checks source timestamps; `off` trusts cached modules indefinitely.
+# opcache-revalidate-seconds overrides the interval after this switch.
+opcache-validate-timestamps: on
+opcache-revalidate-seconds: 0
+
+# Embed normalized ASP source in OAC images for openasp-dis source mapping.
+# Keep this off in production unless the larger cache footprint is acceptable.
+gen-dbg-info: off
+
+# Logging accepts off, stderr, stdout, or a base file path. A file path is
+# written as `<base>-YYYYMMDD` and reopened automatically after midnight.
+log-file: stderr
+# log-file: /var/log/openasp/openasp-fpm.log
+log-level: info
+
+# High-risk native process features stay disabled unless explicitly required.
+shell-enable: off
+process-enable: off
+
+# Double-fork into the background. File logging should be configured when this
+# is enabled because stdin/stdout/stderr are redirected to /dev/null.
+daemon: off
+
+# Accepted for compatibility with existing launch scripts. The current engine
+# always uses its built-in optimization pipeline.
+optimize: on

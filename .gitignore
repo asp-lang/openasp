@@ -1,0 +1,25 @@
+# Build and test output
+/build/
+/release/
+/tests/**/build/
+/tests/**/.runtime/
+/tests/**/*.eglock
+/tests/e2e/
+/.dbg/
+/.run/
+
+# IDE and operating-system metadata
+.DS_Store
+**/.DS_Store
+**/.idea/
+**/.vs/
+**/__pycache__/
+*.py[cod]
+
+# Runtime debris
+*.log
+*.cache
+*.tmp
+/logs/
+/stress-results/
+docs/

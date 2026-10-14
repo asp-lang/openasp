@@ -1,0 +1,4 @@
+<%
+Application("site_name") = "egret-asp"
+Application("phase") = "bootstrap"
+%>

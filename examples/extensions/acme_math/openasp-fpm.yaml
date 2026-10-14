@@ -1,0 +1,9 @@
+external-components:
+  enabled: on
+  require-sha256: off
+  modules:
+    - id: acme-math
+      library: /absolute/path/to/libacme_math.dylib
+      mode: in-process
+      prog-ids:
+        - Acme.Math
