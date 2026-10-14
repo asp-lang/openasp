@@ -390,3 +390,7 @@ ASP 模板和 include 会被解析并编译为经过校验的字节码。独立�
 ## 版本
 
 当前源码版本为 `0.1.0`，由 `src/cmd/version.h` 中的 `OPENASP_VERSION` 定义。
+
+## 更多尝试
+
+[uYasoo-MicroBlog](https://github.com/asp-lang/uyasoo-microblog) 是一个为 OpenASP 构建的完整经典 ASP 微博客。它使用 Redis 存储应用数据，通过 Nginx 和 `openasp-fpm` 运行，支持用户资料、关注、时间线、话题、动态、评论、点赞、搜索和图片上传等功能。按照项目文档即可使用 OpenASP 运行。

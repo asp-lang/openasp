@@ -393,3 +393,7 @@ ASP templates and includes are parsed and compiled into validated bytecode. Stan
 ## Version
 
 The current source version is `0.1.0`, defined by `OPENASP_VERSION` in `src/cmd/version.h`.
+
+## More to Try
+
+[uYasoo-MicroBlog](https://github.com/asp-lang/uyasoo-microblog) is a complete Classic ASP microblog built for OpenASP. It uses Redis for application data and runs behind Nginx through `openasp-fpm`, with support for user profiles, follows, timelines, topics, posts, comments, likes, search, image uploads, and more. Follow the project documentation to run it with OpenASP.
