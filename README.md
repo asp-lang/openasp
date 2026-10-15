@@ -1,4 +1,4 @@
-# OpenASP: Classic ASP for Linux Unix and MacOS
+# OpenASP: High-performance, Low-memory Classic ASP for Linux, Unix and MacOS
 
 <p align="center" id="openasp-top">
   <img src="assets/openasp-logo.png" alt="OpenASP" width="500">
@@ -23,7 +23,7 @@
 
 The official OpenASP website is **[https://asp-lang.org](https://asp-lang.org)**. Questions, suggestions, and ideas are always welcome. Please send feedback through the official website.
 
-OpenASP is a Classic ASP interpreter and resident runtime implemented in pure C11. It runs existing VBScript/ASP applications natively on Linux, Unix and MacOS without Windows Server or IIS. It provides standalone page rendering, a persistent interactive environment, a multi-process FastCGI service, ADO-compatible data access, native components, bytecode caching, and debugging tools.
+OpenASP is a high-performance, low-memory Classic ASP interpreter and resident runtime implemented in pure C11. It runs existing VBScript/ASP applications natively on Linux, Unix and MacOS without Windows Server or IIS. It provides standalone page rendering, a persistent interactive environment, a multi-process FastCGI service, ADO-compatible data access, native components, bytecode caching, and debugging tools. See the [OpenASP vs PHP performance and memory benchmark report](#openasp-vs-php-performance-and-memory) for detailed throughput and memory results.
 
 ## Why OpenASP
 
@@ -397,3 +397,76 @@ The current source version is `0.1.0`, defined by `OPENASP_VERSION` in `src/cmd/
 ## More to Try
 
 [uYasoo-MicroBlog](https://github.com/asp-lang/uyasoo-microblog) is a complete Classic ASP microblog built for OpenASP. It uses Redis for application data and runs behind Nginx through `openasp-fpm`, with support for user profiles, follows, timelines, topics, posts, comments, likes, search, image uploads, and more. Follow the project documentation to run it with OpenASP.
+
+## OpenASP vs PHP Performance and Memory
+
+The following benchmarks compare `openasp-fpm` with PHP-FPM 8.4.4 on an Apple M3 Pro with 12 CPU cores and 36 GiB of memory, running macOS 14.8.1. Each configuration uses 1, 2, 4, or 8 static workers, executes three rounds of 2,000 requests at concurrency 16, and reports the median. Requests rotate evenly through the equivalent `default`, `search`, `tags`, `feed`, and `view` pages after their rendered output has been verified. The load generator connects directly through a Unix FastCGI socket, so Nginx and network overhead are excluded.
+
+The benchmark runners are located in `tests/benchmarks/runners/`. The equivalent OpenASP and PHP workloads are stored in `tests/benchmarks/workloads/openasp/` and `tests/benchmarks/workloads/php/`.
+
+Memory values are the hot-state totals for the complete FPM service, including its master and workers but excluding the load generator and external database/cache services. RSS and macOS physical footprint are both shown in MiB; physical footprint is the more useful comparison on this platform, although the process totals are not equivalent to Linux PSS. Across all five workloads, the test comprises 120 runtime executions and 240,000 measured requests.
+
+### 1. SQLite ZBlog
+
+**Method.** `new-asp-zblog` and `php-zblog` render equivalent blog pages from the same SQLite dataset. Each load-generator thread uses its own session cookie, both runtimes use a 16 MiB bytecode/opcode cache, and timestamp validation is disabled.
+
+| Workers | OpenASP RPS | PHP RPS | OpenASP / PHP | OpenASP RSS | PHP RSS | OpenASP physical | PHP physical | Physical saved |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 2,176 | 2,092 | 1.04x | 7.6 | 33.9 | 3.8 | 18.0 | 79.1% |
+| 2 | 4,202 | 3,978 | 1.06x | 12.6 | 42.7 | 7.4 | 22.9 | 67.7% |
+| 4 | 7,815 | 5,187 | 1.51x | 20.2 | 59.8 | 13.1 | 32.4 | 59.6% |
+| 8 | 10,542 | 5,115 | 2.06x | 36.2 | 91.0 | 24.1 | 50.1 | 51.8% |
+
+**Conclusion.** OpenASP leads at every worker count and scales from 2,176 to 10,542 requests per second, or 4.84x from one to eight workers. PHP-FPM stops scaling after four workers, while OpenASP reaches 2.06x its throughput at eight workers and uses 51.8% less physical memory.
+
+### 2. MySQL ZBlog
+
+**Method.** `new-asp-zblog-mysql` and `php-zblog-mysql` use the same schema and records on a local MySQL 5.7.24 server. This OpenASP variant uses the standard non-buffered Recordset result path, making the test sensitive to database result fetching and value conversion costs.
+
+| Workers | OpenASP RPS | PHP RPS | OpenASP / PHP | OpenASP RSS | PHP RSS | OpenASP physical | PHP physical | Physical saved |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 374 | 620 | 0.60x | 9.3 | 32.3 | 4.0 | 17.0 | 76.4% |
+| 2 | 693 | 1,561 | 0.44x | 15.2 | 39.5 | 9.0 | 21.0 | 57.2% |
+| 4 | 1,305 | 2,233 | 0.58x | 29.1 | 53.9 | 15.6 | 29.1 | 46.6% |
+| 8 | 1,491 | 2,831 | 0.53x | 52.5 | 78.9 | 28.3 | 42.4 | 33.3% |
+
+**Conclusion.** The standard MySQL result path is the clearest current OpenASP bottleneck: throughput is 44-60% of PHP-FPM despite using 33-76% less physical memory. Four workers are the practical efficiency point because doubling to eight workers adds only 14% throughput while increasing physical memory by about 81%.
+
+### 3. MySQL Buffered Result ZBlog
+
+**Method.** `new-asp-zblog-mysql-store` uses the buffered MySQL `store_result` path and is compared with the same `php-zblog-mysql` workload and database used above. The templates, page mix, records, worker settings, and validation remain unchanged, isolating the effect of OpenASP result buffering.
+
+| Workers | OpenASP RPS | PHP RPS | OpenASP / PHP | OpenASP RSS | PHP RSS | OpenASP physical | PHP physical | Physical saved |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 697 | 605 | 1.15x | 9.1 | 32.0 | 3.8 | 16.7 | 77.4% |
+| 2 | 1,374 | 1,544 | 0.89x | 16.6 | 39.3 | 8.4 | 20.8 | 59.7% |
+| 4 | 2,446 | 2,409 | 1.02x | 28.9 | 54.2 | 15.6 | 29.5 | 47.2% |
+| 8 | 2,877 | 2,883 | 1.00x | 52.2 | 79.1 | 28.4 | 42.9 | 33.9% |
+
+**Conclusion.** Buffering removes most of the gap: OpenASP is 15% faster with one worker and effectively tied with PHP-FPM at four and eight workers. Since this changes the OpenASP result mode while preserving the PHP control, the result points to non-buffered row fetching and associated conversion work as the primary optimization target.
+
+### 4. MySQL Batched ZBlog
+
+**Method.** `new-asp-zblog-mysql-batch` and `php-zblog-mysql-batch` batch post-tag retrieval so that a page requires fewer database round trips. Both sides use equivalent batched queries against the same MySQL data.
+
+| Workers | OpenASP RPS | PHP RPS | OpenASP / PHP | OpenASP RSS | PHP RSS | OpenASP physical | PHP physical | Physical saved |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 672 | 730 | 0.92x | 8.9 | 32.3 | 3.9 | 17.0 | 77.2% |
+| 2 | 1,420 | 1,511 | 0.94x | 16.9 | 39.7 | 8.7 | 21.3 | 59.3% |
+| 4 | 2,730 | 2,841 | 0.96x | 28.5 | 53.6 | 15.0 | 28.8 | 47.8% |
+| 8 | 3,397 | 3,014 | 1.13x | 52.2 | 80.0 | 27.8 | 43.5 | 36.2% |
+
+**Conclusion.** The runtimes remain within 4-8% through four workers, and OpenASP becomes 12.7% faster at eight workers. Reducing database round trips exposes stronger OpenASP worker scaling; four workers offer the best memory efficiency, while eight workers provide the highest throughput.
+
+### 5. Redis and Memcache ZBlog
+
+**Method.** `new-asp-zblog-redis-mc` and `php-zblog-redis-mc` use equivalent Redis and Memcache data access. Redis 8.10.1 and Memcached 1.6.45 run on isolated ports for each round, and both workloads use persistent client connections so that a previous round cannot warm or contaminate the next one.
+
+| Workers | OpenASP RPS | PHP RPS | OpenASP / PHP | OpenASP RSS | PHP RSS | OpenASP physical | PHP physical | Physical saved |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 1,959 | 1,655 | 1.18x | 7.2 | 32.5 | 3.5 | 17.1 | 79.9% |
+| 2 | 3,595 | 3,549 | 1.01x | 11.9 | 39.8 | 6.8 | 21.3 | 67.9% |
+| 4 | 6,167 | 5,294 | 1.16x | 18.0 | 53.5 | 11.3 | 28.8 | 60.9% |
+| 8 | 7,999 | 4,177 | 1.92x | 32.6 | 78.7 | 21.9 | 43.1 | 49.1% |
+
+**Conclusion.** OpenASP matches or exceeds PHP-FPM at every worker count. PHP-FPM peaks at four workers and then falls by 21%, whereas OpenASP continues to 7,999 requests per second, reaches 1.92x PHP throughput, and uses 49.1% less physical memory at eight workers.

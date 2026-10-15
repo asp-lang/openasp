@@ -221,13 +221,13 @@ def main() -> int:
                 asp_output = output_dir / f"openasp-w{workers}-r{round_index + 1}.json"
                 php_output = output_dir / f"php-w{workers}-r{round_index + 1}.json"
                 asp_command = [
-                    sys.executable, str(ROOT / "tests" / "benchmark_memory.py"),
+                    sys.executable, str(ROOT / "tests" / "benchmarks" / "runners" / "benchmark_memory.py"),
                     "--binary", str(args.openasp_fpm.resolve()),
                     "--root", str(asp_root),
                     *common, "--paths", *asp_paths,
                 ]
                 php_command = [
-                    sys.executable, str(ROOT / "tests" / "benchmark_php_fpm.py"),
+                    sys.executable, str(ROOT / "tests" / "benchmarks" / "runners" / "benchmark_php_fpm.py"),
                     "--php-fpm", str(args.php_fpm.resolve()),
                     "--root", str(php_root),
                     "--env", f"PHP_ZBLOG_MYSQL_HOST={args.mysql_host}",

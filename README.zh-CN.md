@@ -1,4 +1,4 @@
-# OpenASP：面向 Linux、Unix 和 MacOS 的经典 ASP
+# OpenASP：高性能低内存的面向 Linux、Unix 和 MacOS 的经典 ASP
 
 <p align="center" id="openasp-top">
   <img src="assets/openasp-logo.png" alt="OpenASP" width="500">
@@ -23,7 +23,7 @@
 
 OpenASP 的官方主页是 **[https://asp-lang.org](https://asp-lang.org)**。有任何问题、建议或想法，请随时通过官方网站反馈。
 
-OpenASP 是一个使用纯 C11 实现的经典 ASP 解释器和常驻运行时。它让现有的 VBScript/ASP 应用无需 Windows Server 和 IIS，即可原生运行在 Linux、Unix 和 MacOS 上。OpenASP 提供独立页面渲染、持久交互环境、多进程 FastCGI 服务、兼容 ADO 的数据访问、原生组件、字节码缓存和调试工具。
+OpenASP 是一个使用纯 C11 实现的高性能、低内存经典 ASP 解释器和常驻运行时。它让现有的 VBScript/ASP 应用无需 Windows Server 和 IIS，即可原生运行在 Linux、Unix 和 MacOS 上。OpenASP 提供独立页面渲染、持久交互环境、多进程 FastCGI 服务、兼容 ADO 的数据访问、原生组件、字节码缓存和调试工具。详细吞吐和内存数据请参阅 [OpenASP 和 PHP 的性能和内存压测报告](#openasp和php的性能和内存对比)。
 
 ## 为什么选择 OpenASP
 
@@ -394,3 +394,76 @@ ASP 模板和 include 会被解析并编译为经过校验的字节码。独立�
 ## 更多尝试
 
 [uYasoo-MicroBlog](https://github.com/asp-lang/uyasoo-microblog) 是一个为 OpenASP 构建的完整经典 ASP 微博客。它使用 Redis 存储应用数据，通过 Nginx 和 `openasp-fpm` 运行，支持用户资料、关注、时间线、话题、动态、评论、点赞、搜索和图片上传等功能。按照项目文档即可使用 OpenASP 运行。
+
+## OpenASP和PHP的性能和内存对比
+
+以下基准测试在配备 12 核 CPU 和 36 GiB 内存的 Apple M3 Pro、macOS 14.8.1 上对比 `openasp-fpm` 与 PHP-FPM 8.4.4。每个配置使用 1、2、4 或 8 个静态 worker，以并发 16 分别执行三轮 2,000 次请求，最终取中位数。确认两端渲染输出一致后，请求会均匀轮询等价的 `default`、`search`、`tags`、`feed` 和 `view` 页面。负载生成器通过 Unix FastCGI socket 直连，因此数据不包含 Nginx 和网络开销。
+
+压测 runner 位于 `tests/benchmarks/runners/`，OpenASP 与 PHP 的对等 workload 分别位于 `tests/benchmarks/workloads/openasp/` 和 `tests/benchmarks/workloads/php/`。
+
+内存数据是整个 FPM 服务在热请求结束时的总和，包括 master 和 worker，但不包括负载生成器及外部数据库、缓存服务。表中的 RSS 和 macOS Physical footprint 单位均为 MiB；在该平台上 Physical footprint 更适合实际内存对比，但各进程数值相加并不等价于 Linux PSS。五组测试共执行 120 个 runtime 实例和 240,000 次正式请求。
+
+### 1. SQLite ZBlog
+
+**方法。** `new-asp-zblog` 与 `php-zblog` 使用同一份 SQLite 数据渲染等价的博客页面。每个负载线程使用独立 Session Cookie，两端均使用 16 MiB 字节码或 Opcode 缓存，并关闭时间戳校验。
+
+| Worker | OpenASP RPS | PHP RPS | OpenASP / PHP | OpenASP RSS | PHP RSS | OpenASP Physical | PHP Physical | 物理内存节省 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 2,176 | 2,092 | 1.04x | 7.6 | 33.9 | 3.8 | 18.0 | 79.1% |
+| 2 | 4,202 | 3,978 | 1.06x | 12.6 | 42.7 | 7.4 | 22.9 | 67.7% |
+| 4 | 7,815 | 5,187 | 1.51x | 20.2 | 59.8 | 13.1 | 32.4 | 59.6% |
+| 8 | 10,542 | 5,115 | 2.06x | 36.2 | 91.0 | 24.1 | 50.1 | 51.8% |
+
+**结论。** OpenASP 在所有 worker 数量下均领先，吞吐从单 worker 的 2,176 RPS 扩展到八 worker 的 10,542 RPS，提升 4.84 倍。PHP-FPM 在四 worker 后停止增长；八 worker 时 OpenASP 吞吐达到 PHP 的 2.06 倍，同时少用 51.8% 的物理内存。
+
+### 2. MySQL ZBlog
+
+**方法。** `new-asp-zblog-mysql` 与 `php-zblog-mysql` 使用本机 MySQL 5.7.24 中相同的表结构和数据。该 OpenASP 版本使用标准非缓冲 Recordset 结果路径，因此测试会直接反映数据库结果获取与值转换成本。
+
+| Worker | OpenASP RPS | PHP RPS | OpenASP / PHP | OpenASP RSS | PHP RSS | OpenASP Physical | PHP Physical | 物理内存节省 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 374 | 620 | 0.60x | 9.3 | 32.3 | 4.0 | 17.0 | 76.4% |
+| 2 | 693 | 1,561 | 0.44x | 15.2 | 39.5 | 9.0 | 21.0 | 57.2% |
+| 4 | 1,305 | 2,233 | 0.58x | 29.1 | 53.9 | 15.6 | 29.1 | 46.6% |
+| 8 | 1,491 | 2,831 | 0.53x | 52.5 | 78.9 | 28.3 | 42.4 | 33.3% |
+
+**结论。** 标准 MySQL 结果路径是 OpenASP 当前最明显的性能瓶颈：吞吐仅为 PHP-FPM 的 44% 至 60%，但物理内存仍少用 33% 至 76%。四 worker 是更实际的性价比点，因为继续翻倍至八 worker 仅增加 14% 吞吐，物理内存则增加约 81%。
+
+### 3. MySQL 缓冲结果集 ZBlog
+
+**方法。** `new-asp-zblog-mysql-store` 使用 MySQL `store_result` 缓冲结果路径，并与上一组相同的 `php-zblog-mysql` 和数据库对比。模板、页面比例、数据、worker 配置和输出校验都保持不变，从而单独观察 OpenASP 结果缓冲模式的影响。
+
+| Worker | OpenASP RPS | PHP RPS | OpenASP / PHP | OpenASP RSS | PHP RSS | OpenASP Physical | PHP Physical | 物理内存节省 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 697 | 605 | 1.15x | 9.1 | 32.0 | 3.8 | 16.7 | 77.4% |
+| 2 | 1,374 | 1,544 | 0.89x | 16.6 | 39.3 | 8.4 | 20.8 | 59.7% |
+| 4 | 2,446 | 2,409 | 1.02x | 28.9 | 54.2 | 15.6 | 29.5 | 47.2% |
+| 8 | 2,877 | 2,883 | 1.00x | 52.2 | 79.1 | 28.4 | 42.9 | 33.9% |
+
+**结论。** 缓冲结果集消除了大部分差距：单 worker 时 OpenASP 快 15%，四和八 worker 时与 PHP-FPM 基本持平。由于 PHP 对照保持不变而只切换了 OpenASP 结果模式，因此非缓冲逐行读取及其相关转换工作是后续最主要的优化目标。
+
+### 4. MySQL 批量查询 ZBlog
+
+**方法。** `new-asp-zblog-mysql-batch` 与 `php-zblog-mysql-batch` 批量读取文章标签，减少每次页面请求所需的数据库往返次数。两端针对同一份 MySQL 数据执行等价的批量查询。
+
+| Worker | OpenASP RPS | PHP RPS | OpenASP / PHP | OpenASP RSS | PHP RSS | OpenASP Physical | PHP Physical | 物理内存节省 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 672 | 730 | 0.92x | 8.9 | 32.3 | 3.9 | 17.0 | 77.2% |
+| 2 | 1,420 | 1,511 | 0.94x | 16.9 | 39.7 | 8.7 | 21.3 | 59.3% |
+| 4 | 2,730 | 2,841 | 0.96x | 28.5 | 53.6 | 15.0 | 28.8 | 47.8% |
+| 8 | 3,397 | 3,014 | 1.13x | 52.2 | 80.0 | 27.8 | 43.5 | 36.2% |
+
+**结论。** 1 至 4 worker 时两端差距保持在约 4% 至 8%，八 worker 时 OpenASP 反超 12.7%。减少数据库往返后，OpenASP 的 worker 扩展能力更加明显；四 worker 的内存效率最好，八 worker 的绝对吞吐最高。
+
+### 5. Redis 和 Memcache ZBlog
+
+**方法。** `new-asp-zblog-redis-mc` 与 `php-zblog-redis-mc` 使用等价的 Redis 和 Memcache 数据访问。Redis 8.10.1 与 Memcached 1.6.45 在每轮测试中使用隔离端口，两端均使用持久客户端连接，避免上一轮缓存状态污染下一轮。
+
+| Worker | OpenASP RPS | PHP RPS | OpenASP / PHP | OpenASP RSS | PHP RSS | OpenASP Physical | PHP Physical | 物理内存节省 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 1,959 | 1,655 | 1.18x | 7.2 | 32.5 | 3.5 | 17.1 | 79.9% |
+| 2 | 3,595 | 3,549 | 1.01x | 11.9 | 39.8 | 6.8 | 21.3 | 67.9% |
+| 4 | 6,167 | 5,294 | 1.16x | 18.0 | 53.5 | 11.3 | 28.8 | 60.9% |
+| 8 | 7,999 | 4,177 | 1.92x | 32.6 | 78.7 | 21.9 | 43.1 | 49.1% |
+
+**结论。** OpenASP 在所有 worker 数量下均不弱于 PHP-FPM。PHP-FPM 在四 worker 达到峰值后下降 21%，OpenASP 则继续提升到 7,999 RPS；八 worker 时吞吐为 PHP 的 1.92 倍，物理内存少用 49.1%。
