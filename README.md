@@ -400,11 +400,11 @@ The current source version is `0.1.0`, defined by `OPENASP_VERSION` in `src/cmd/
 
 ## OpenASP vs PHP Performance and Memory
 
-The following benchmarks compare `openasp-fpm` with PHP-FPM 8.4.4 on an Apple M3 Pro with 12 CPU cores and 36 GiB of memory, running macOS 14.8.1. Each configuration uses 1, 2, 4, or 8 static workers, executes three rounds of 2,000 requests at concurrency 16, and reports the median. Requests rotate evenly through the equivalent `default`, `search`, `tags`, `feed`, and `view` pages after their rendered output has been verified. The load generator connects directly through a Unix FastCGI socket, so Nginx and network overhead are excluded.
+The following benchmarks compare `openasp-fpm` with PHP-FPM 8.4.4 on an Apple M3 Pro with 12 CPU cores and 36 GiB of memory, running MacOS 14.8.1. Each configuration uses 1, 2, 4, or 8 static workers, executes three rounds of 2,000 requests at concurrency 16, and reports the median. Requests rotate evenly through the equivalent `default`, `search`, `tags`, `feed`, and `view` pages after their rendered output has been verified. The load generator connects directly through a Unix FastCGI socket, so Nginx and network overhead are excluded.
 
 The benchmark runners are located in `tests/benchmarks/runners/`. The equivalent OpenASP and PHP workloads are stored in `tests/benchmarks/workloads/openasp/` and `tests/benchmarks/workloads/php/`.
 
-Memory values are the hot-state totals for the complete FPM service, including its master and workers but excluding the load generator and external database/cache services. RSS and macOS physical footprint are both shown in MiB; physical footprint is the more useful comparison on this platform, although the process totals are not equivalent to Linux PSS. Across all five workloads, the test comprises 120 runtime executions and 240,000 measured requests.
+Memory values are the hot-state totals for the complete FPM service, including its master and workers but excluding the load generator and external database/cache services. RSS and MacOS physical footprint are both shown in MiB; physical footprint is the more useful comparison on this platform, although the process totals are not equivalent to Linux PSS. Across all five workloads, the test comprises 120 runtime executions and 240,000 measured requests.
 
 ### 1. SQLite ZBlog
 

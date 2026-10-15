@@ -82,7 +82,7 @@ sudo apt-get install -y \
     libglib2.0-dev gettext
 ```
 
-### macOS
+### MacOS
 
 安装 Xcode 命令行工具和 Homebrew 依赖：
 
@@ -397,11 +397,11 @@ ASP 模板和 include 会被解析并编译为经过校验的字节码。独立�
 
 ## OpenASP和PHP的性能和内存对比
 
-以下基准测试在配备 12 核 CPU 和 36 GiB 内存的 Apple M3 Pro、macOS 14.8.1 上对比 `openasp-fpm` 与 PHP-FPM 8.4.4。每个配置使用 1、2、4 或 8 个静态 worker，以并发 16 分别执行三轮 2,000 次请求，最终取中位数。确认两端渲染输出一致后，请求会均匀轮询等价的 `default`、`search`、`tags`、`feed` 和 `view` 页面。负载生成器通过 Unix FastCGI socket 直连，因此数据不包含 Nginx 和网络开销。
+以下基准测试在配备 12 核 CPU 和 36 GiB 内存的 Apple M3 Pro、MacOS 14.8.1 上对比 `openasp-fpm` 与 PHP-FPM 8.4.4。每个配置使用 1、2、4 或 8 个静态 worker，以并发 16 分别执行三轮 2,000 次请求，最终取中位数。确认两端渲染输出一致后，请求会均匀轮询等价的 `default`、`search`、`tags`、`feed` 和 `view` 页面。负载生成器通过 Unix FastCGI socket 直连，因此数据不包含 Nginx 和网络开销。
 
 压测 runner 位于 `tests/benchmarks/runners/`，OpenASP 与 PHP 的对等 workload 分别位于 `tests/benchmarks/workloads/openasp/` 和 `tests/benchmarks/workloads/php/`。
 
-内存数据是整个 FPM 服务在热请求结束时的总和，包括 master 和 worker，但不包括负载生成器及外部数据库、缓存服务。表中的 RSS 和 macOS Physical footprint 单位均为 MiB；在该平台上 Physical footprint 更适合实际内存对比，但各进程数值相加并不等价于 Linux PSS。五组测试共执行 120 个 runtime 实例和 240,000 次正式请求。
+内存数据是整个 FPM 服务在热请求结束时的总和，包括 master 和 worker，但不包括负载生成器及外部数据库、缓存服务。表中的 RSS 和 MacOS Physical footprint 单位均为 MiB；在该平台上 Physical footprint 更适合实际内存对比，但各进程数值相加并不等价于 Linux PSS。五组测试共执行 120 个 runtime 实例和 240,000 次正式请求。
 
 ### 1. SQLite ZBlog
 
