@@ -24,12 +24,14 @@ static const oasp_component_registration registry[] = {
     {"msxml2.serverxmlhttp.3.0", OASP_COMPONENT_HTTP, "MSXML2.ServerXMLHTTP"},
     {"msxml2.serverxmlhttp.6.0", OASP_COMPONENT_HTTP, "MSXML2.ServerXMLHTTP"},
     {"openasp.httpclient", OASP_COMPONENT_HTTP, "OpenASP.HttpClient"},
+    {"openasp.httpmulti", OASP_COMPONENT_HTTP_MULTI, "OpenASP.HttpMulti"},
     {"adodb.connection", OASP_COMPONENT_ADO_CONNECTION, "ADODB.Connection"},
     {"adodb.recordset", OASP_COMPONENT_ADO_RECORDSET, "ADODB.Recordset"},
     {"adodb.command", OASP_COMPONENT_ADO_COMMAND, "ADODB.Command"},
     {"openasp.socket", OASP_COMPONENT_SOCKET, "OpenASP.Socket"},
     {"openasp.redis", OASP_COMPONENT_REDIS, "OpenASP.Redis"},
     {"redis.client", OASP_COMPONENT_REDIS, "OpenASP.Redis"},
+    {"openasp.redismulti", OASP_COMPONENT_REDIS_MULTI, "OpenASP.RedisMulti"},
     {"openasp.json", OASP_COMPONENT_JSON, "OpenASP.JSON"},
     {"openasp.json.object", OASP_COMPONENT_DICTIONARY, "OpenASP.JSON.Object"},
     {"openasp.crypto", OASP_COMPONENT_CRYPTO, "OpenASP.Crypto"},
@@ -38,6 +40,7 @@ static const oasp_component_registration registry[] = {
     {"openasp.websocket", OASP_COMPONENT_WEBSOCKET, "OpenASP.WebSocket"},
     {"openasp.memcache", OASP_COMPONENT_MEMCACHE, "OpenASP.Memcache"},
     {"openasp.memcached", OASP_COMPONENT_MEMCACHE, "OpenASP.Memcache"},
+    {"openasp.memcachemulti", OASP_COMPONENT_MEMCACHE_MULTI, "OpenASP.MemcacheMulti"},
     {"shell.application", OASP_COMPONENT_SHELL, "Shell.Application"},
 };
 

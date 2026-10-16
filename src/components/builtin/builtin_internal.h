@@ -52,11 +52,19 @@ bool oasp_builtin_json_call(oasp_runtime *runtime, oasp_slice member, oasp_value
 bool oasp_builtin_crypto_call(oasp_runtime *runtime, oasp_slice member, oasp_value *arguments, size_t argument_count, size_t line,
                               oasp_value *result);
 void oasp_builtin_http_finalize(void *context);
+oasp_object *oasp_builtin_http_create(oasp_runtime *runtime, const char *name);
+bool oasp_builtin_http_prepare(oasp_runtime *runtime, oasp_http *http, long default_timeout_ms);
+void oasp_builtin_http_complete(oasp_runtime *runtime, oasp_http *http, CURLcode status);
+void oasp_builtin_http_easy_cleanup(oasp_http *http);
 bool oasp_builtin_http_perform(oasp_runtime *runtime, oasp_object *object, oasp_http *http, const char *body, size_t line);
 oasp_value oasp_builtin_http_response_header(oasp_runtime *runtime, const oasp_http *http, const char *name);
 bool oasp_builtin_http_set(oasp_runtime *runtime, oasp_object *object, oasp_slice member, const oasp_value *value, size_t line);
 bool oasp_builtin_http_call(oasp_runtime *runtime, oasp_object *object, oasp_slice member, oasp_value *arguments, size_t argument_count,
                             size_t line, oasp_value *result);
+bool oasp_builtin_http_multi_get(oasp_object *object, oasp_slice member, oasp_value *result);
+bool oasp_builtin_http_multi_set(oasp_runtime *runtime, oasp_object *object, oasp_slice member, const oasp_value *value, size_t line);
+bool oasp_builtin_http_multi_call(oasp_runtime *runtime, oasp_object *object, oasp_slice member, oasp_value *arguments, size_t argument_count,
+                                  size_t line, oasp_value *result);
 char *oasp_builtin_openai_payload(oasp_runtime *runtime, oasp_openai *openai, const oasp_value *input, bool responses);
 bool oasp_builtin_openai_request(oasp_runtime *runtime, oasp_object *object, oasp_openai *openai, const char *endpoint, const char *payload,
                                  size_t line, oasp_value *result);
@@ -92,6 +100,13 @@ bool oasp_builtin_redis_call(oasp_runtime *runtime, oasp_object *object, oasp_sl
                              size_t line, oasp_value *result);
 bool oasp_builtin_redis_get_property(oasp_object *object, oasp_slice member, oasp_value *result);
 bool oasp_builtin_redis_set(oasp_runtime *runtime, oasp_object *object, oasp_slice member, const oasp_value *value, size_t line);
+bool oasp_builtin_redis_command_equal(const oasp_builtin_kv_argument *argument, const char *name);
+void *oasp_builtin_redis_multi_create(oasp_runtime *runtime);
+void oasp_builtin_redis_multi_gc_trace(oasp_allocator *allocator, const oasp_object *object);
+bool oasp_builtin_redis_multi_get(oasp_object *object, oasp_slice member, oasp_value *result);
+bool oasp_builtin_redis_multi_set(oasp_runtime *runtime, oasp_object *object, oasp_slice member, const oasp_value *value, size_t line);
+bool oasp_builtin_redis_multi_call(oasp_runtime *runtime, oasp_object *object, oasp_slice member, oasp_value *arguments, size_t argument_count,
+                                   size_t line, oasp_value *result);
 bool oasp_builtin_kv_write_all(oasp_kv_pool_entry *connection, const void *data, size_t length);
 bool oasp_builtin_kv_read_fill(oasp_kv_pool_entry *connection);
 bool oasp_builtin_kv_read_exact(oasp_kv_pool_entry *connection, void *data, size_t length);
@@ -104,6 +119,13 @@ bool oasp_builtin_memcache_call(oasp_runtime *runtime, oasp_object *object, oasp
                                 size_t line, oasp_value *result);
 bool oasp_builtin_memcache_get_property(oasp_object *object, oasp_slice member, oasp_value *result);
 bool oasp_builtin_memcache_set(oasp_runtime *runtime, oasp_object *object, oasp_slice member, const oasp_value *value, size_t line);
+bool oasp_builtin_memcache_key_valid(const char *key, size_t length);
+void *oasp_builtin_memcache_multi_create(oasp_runtime *runtime);
+void oasp_builtin_memcache_multi_gc_trace(oasp_allocator *allocator, const oasp_object *object);
+bool oasp_builtin_memcache_multi_get(oasp_object *object, oasp_slice member, oasp_value *result);
+bool oasp_builtin_memcache_multi_set(oasp_runtime *runtime, oasp_object *object, oasp_slice member, const oasp_value *value, size_t line);
+bool oasp_builtin_memcache_multi_call(oasp_runtime *runtime, oasp_object *object, oasp_slice member, oasp_value *arguments, size_t argument_count,
+                                      size_t line, oasp_value *result);
 
 oasp_dictionary *oasp_builtin_dictionary_create(oasp_runtime *runtime, int compare_mode);
 bool oasp_builtin_dictionary_get(oasp_runtime *runtime, oasp_object *object, oasp_slice member, oasp_value *result);

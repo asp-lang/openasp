@@ -61,20 +61,39 @@ typedef struct {
     oasp_xml_node *node;
 } oasp_xml_attribute_map;
 
+typedef struct oasp_http_multi oasp_http_multi;
+
 typedef struct {
     oasp_buffer response;
     oasp_buffer response_headers;
     struct curl_slist *headers;
+    CURL *easy;
     oasp_slice method;
     oasp_slice url;
+    oasp_slice body;
     oasp_slice content_type;
     oasp_slice ca_file;
+    oasp_object *next_multi_request;
+    oasp_http_multi *multi_owner;
     long status;
     long timeout_ms;
+    long error_code;
     size_t max_response_bytes;
     int ready_state;
+    char error_message[CURL_ERROR_SIZE];
+    bool completed;
+    bool timeout_explicit;
     bool tls_verify;
 } oasp_http;
+
+struct oasp_http_multi {
+    oasp_object *first;
+    oasp_object *last;
+    size_t count;
+    long max_concurrency;
+    long timeout_ms;
+    bool executing;
+};
 
 typedef struct {
     oasp_slice api_key;

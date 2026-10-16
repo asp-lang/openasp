@@ -168,7 +168,7 @@ def main() -> int:
     assert_cli(
         openasp,
         "component_factories.asp",
-        "|".join(["True"] * 18) + "\n",
+        "|".join(["True"] * 21) + "\n",
     )
     assert_cli(
         openasp,

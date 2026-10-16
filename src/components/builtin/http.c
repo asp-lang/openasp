@@ -41,8 +41,59 @@ static size_t oasp_http_header(char *data, size_t size, size_t count, void *cont
     return oasp_buffer_append(&http->response_headers, data, length) ? length : 0;
 }
 
+oasp_object *oasp_builtin_http_create(oasp_runtime *runtime, const char *name) {
+    oasp_object *object = oasp_component_object(runtime, OASP_COMPONENT_HTTP, name, NULL);
+    if (!object)
+        return NULL;
+    oasp_gc_root root;
+    oasp_runtime_gc_root_enter(runtime, &root, NULL, 0, &object, 1, NULL, 0);
+    oasp_http *http = oasp_runtime_alloc(runtime, sizeof(*http), _Alignof(oasp_http));
+    if (!http) {
+        oasp_runtime_gc_root_leave(runtime, &root);
+        return NULL;
+    }
+    memset(http, 0, sizeof(*http));
+    if (!oasp_buffer_init(&http->response, 4096)) {
+        oasp_runtime_gc_root_leave(runtime, &root);
+        return NULL;
+    }
+    if (!oasp_buffer_init(&http->response_headers, 1024)) {
+        oasp_buffer_dispose(&http->response);
+        oasp_runtime_gc_root_leave(runtime, &root);
+        return NULL;
+    }
+    http->method = (oasp_slice){"GET", 3};
+    http->url = (oasp_slice){"", 0};
+    http->body = (oasp_slice){"", 0};
+    http->content_type = (oasp_slice){"", 0};
+    http->ca_file = (oasp_slice){"", 0};
+    http->timeout_ms = 30000;
+    http->max_response_bytes = 16777216;
+    http->tls_verify = true;
+    ptrdiff_t external_bytes = (ptrdiff_t)(http->response.capacity + http->response_headers.capacity);
+    if (!oasp_runtime_account_external(runtime, http, external_bytes)) {
+        oasp_buffer_dispose(&http->response);
+        oasp_buffer_dispose(&http->response_headers);
+        oasp_runtime_gc_root_leave(runtime, &root);
+        return NULL;
+    }
+    if (!oasp_runtime_defer(runtime, http, oasp_builtin_http_finalize, http)) {
+        (void)oasp_runtime_account_external(runtime, http, -external_bytes);
+        oasp_buffer_dispose(&http->response);
+        oasp_buffer_dispose(&http->response_headers);
+        oasp_runtime_gc_root_leave(runtime, &root);
+        return NULL;
+    }
+    object->native = http;
+    if (runtime->allocator)
+        oasp_allocator_write_barrier(runtime->allocator, object, http);
+    oasp_runtime_gc_root_leave(runtime, &root);
+    return object;
+}
+
 void oasp_builtin_http_finalize(void *context) {
     oasp_http *http = context;
+    oasp_builtin_http_easy_cleanup(http);
     oasp_buffer_dispose(&http->response);
     oasp_buffer_dispose(&http->response_headers);
     if (http->headers)
@@ -50,47 +101,106 @@ void oasp_builtin_http_finalize(void *context) {
     http->headers = NULL;
 }
 
-bool oasp_builtin_http_perform(oasp_runtime *runtime, oasp_object *object, oasp_http *http, const char *body, size_t line) {
+void oasp_builtin_http_easy_cleanup(oasp_http *http) {
+    if (!http || !http->easy)
+        return;
+    curl_easy_cleanup(http->easy);
+    http->easy = NULL;
+}
+
+bool oasp_builtin_http_prepare(oasp_runtime *runtime, oasp_http *http, long default_timeout_ms) {
+    if (!runtime || !http || http->easy)
+        return false;
     CURL *curl = curl_easy_init();
     if (!curl)
         return false;
+    http->easy = curl;
     http->response.length = 0;
     http->response.data[0] = '\0';
     http->response_headers.length = 0;
     http->response_headers.data[0] = '\0';
-    char *url = oasp_runtime_copy(runtime, http->url.data, http->url.length);
-    char *method = oasp_runtime_copy(runtime, http->method.data, http->method.length);
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method && *method ? method : "GET");
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, oasp_http_write);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, http);
-    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, oasp_http_header);
-    curl_easy_setopt(curl, CURLOPT_HEADERDATA, http);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, http->headers);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, http->timeout_ms > 0 ? http->timeout_ms : 30000L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, http->tls_verify ? 1L : 0L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, http->tls_verify ? 2L : 0L);
+    http->content_type = (oasp_slice){"", 0};
+    http->status = 0;
+    http->error_code = CURLE_OK;
+    http->error_message[0] = '\0';
+    http->completed = false;
+    http->ready_state = 1;
+    const char *url = http->url.data;
+    const char *method = http->method.data;
+    long timeout_ms = http->timeout_explicit ? http->timeout_ms : default_timeout_ms;
+    if (!url || !method ||
+        curl_easy_setopt(curl, CURLOPT_URL, url) != CURLE_OK ||
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, *method ? method : "GET") != CURLE_OK ||
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L) != CURLE_OK ||
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, oasp_http_write) != CURLE_OK ||
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, http) != CURLE_OK ||
+        curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, oasp_http_header) != CURLE_OK ||
+        curl_easy_setopt(curl, CURLOPT_HEADERDATA, http) != CURLE_OK ||
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, http->headers) != CURLE_OK ||
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, timeout_ms > 0 ? timeout_ms : 30000L) != CURLE_OK ||
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, http->tls_verify ? 1L : 0L) != CURLE_OK ||
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, http->tls_verify ? 2L : 0L) != CURLE_OK ||
+        curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, http->error_message) != CURLE_OK ||
+        curl_easy_setopt(curl, CURLOPT_PRIVATE, http) != CURLE_OK)
+        goto failed;
     if (http->ca_file.length) {
-        char *ca = oasp_runtime_copy(runtime, http->ca_file.data, http->ca_file.length);
-        curl_easy_setopt(curl, CURLOPT_CAINFO, ca);
+        if (curl_easy_setopt(curl, CURLOPT_CAINFO, http->ca_file.data) != CURLE_OK)
+            goto failed;
     }
-    if (body)
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body);
-    CURLcode status = curl_easy_perform(curl);
+    if (http->body.data && (http->body.length || !strcasecmp(method, "POST"))) {
+        if (curl_easy_setopt(curl, CURLOPT_POSTFIELDS, http->body.data) != CURLE_OK ||
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)http->body.length) != CURLE_OK)
+            goto failed;
+    }
+    return true;
+
+failed:
+    oasp_builtin_http_easy_cleanup(http);
+    return false;
+}
+
+void oasp_builtin_http_complete(oasp_runtime *runtime, oasp_http *http, CURLcode status) {
+    if (!runtime || !http || !http->easy)
+        return;
+    http->error_code = status;
+    curl_easy_getinfo(http->easy, CURLINFO_RESPONSE_CODE, &http->status);
     if (status == CURLE_OK) {
         char *content_type = NULL;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http->status);
-        curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &content_type);
+        curl_easy_getinfo(http->easy, CURLINFO_CONTENT_TYPE, &content_type);
         if (content_type) {
-            http->content_type.data = oasp_runtime_copy(runtime, content_type, strlen(content_type));
-            http->content_type.length = strlen(content_type);
+            size_t length = strlen(content_type);
+            char *copy = oasp_runtime_copy(runtime, content_type, length);
+            if (copy)
+                http->content_type = (oasp_slice){copy, length};
         }
-        http->ready_state = 4;
-    } else {
-        oasp_runtime_raise(runtime, 12004, "HTTP request failed", object->component_name, line);
+    } else if (!http->error_message[0]) {
+        const char *message = curl_easy_strerror(status);
+        snprintf(http->error_message, sizeof(http->error_message), "%s", message);
     }
-    curl_easy_cleanup(curl);
+    http->ready_state = 4;
+    http->completed = true;
+}
+
+bool oasp_builtin_http_perform(oasp_runtime *runtime, oasp_object *object, oasp_http *http, const char *body, size_t line) {
+    oasp_object *rooted_object = object;
+    oasp_gc_root root;
+    oasp_runtime_gc_root_enter(runtime, &root, NULL, 0, &rooted_object, 1, NULL, 0);
+    oasp_slice saved_body = http->body;
+    if (body)
+        http->body = (oasp_slice){body, strlen(body)};
+    if (!oasp_builtin_http_prepare(runtime, http, http->timeout_ms > 0 ? http->timeout_ms : 30000L)) {
+        http->body = saved_body;
+        oasp_runtime_gc_root_leave(runtime, &root);
+        oasp_runtime_raise(runtime, 7, "unable to initialize HTTP request", object->component_name, line);
+        return false;
+    }
+    CURLcode status = curl_easy_perform(http->easy);
+    oasp_builtin_http_complete(runtime, http, status);
+    oasp_builtin_http_easy_cleanup(http);
+    http->body = saved_body;
+    if (status != CURLE_OK)
+        oasp_runtime_raise(runtime, 12004, "HTTP request failed", object->component_name, line);
+    oasp_runtime_gc_root_leave(runtime, &root);
     return status == CURLE_OK;
 }
 
@@ -257,8 +367,18 @@ bool oasp_builtin_http_set(oasp_runtime *runtime, oasp_object *object, oasp_slic
         oasp_http *http = object->native;
         if (oasp_ascii_equal(member, "timeout")) {
             int64_t timeout = 0;
-            if (oasp_value_to_int(value, &timeout) && timeout >= 0)
+            if (oasp_value_to_int(value, &timeout) && timeout > 0 && timeout <= LONG_MAX) {
                 http->timeout_ms = (long)timeout;
+                http->timeout_explicit = true;
+            } else {
+                oasp_runtime_raise(runtime, 5, "invalid HTTP timeout", object->component_name, line);
+            }
+            return true;
+        }
+        if (oasp_ascii_equal(member, "body")) {
+            char *text = oasp_value_format(runtime->arena, value);
+            if (text)
+                http->body = (oasp_slice){text, strlen(text)};
             return true;
         }
         if (oasp_ascii_equal(member, "maxresponsebytes")) {
@@ -354,6 +474,9 @@ bool oasp_builtin_http_call(oasp_runtime *runtime, oasp_object *object, oasp_sli
             http->method = (oasp_slice){method, strlen(method)};
             http->url = (oasp_slice){url, strlen(url)};
             http->ready_state = 1;
+            http->completed = false;
+            http->error_code = CURLE_OK;
+            http->error_message[0] = '\0';
         }
     } else if ((oasp_ascii_equal(member, "setrequestheader") || oasp_ascii_equal(member, "setheader")) && argument_count >= 2) {
         char *name = oasp_value_format(runtime->arena, &arguments[0]);

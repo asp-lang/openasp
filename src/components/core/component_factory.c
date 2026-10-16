@@ -31,6 +31,10 @@ oasp_value oasp_component_create(oasp_runtime *runtime, oasp_slice prog_id, size
         oasp_runtime_raise(runtime, 429, "unsupported CreateObject provider", "Server", line);
         return oasp_value_empty();
     }
+    if (registration->kind == OASP_COMPONENT_HTTP) {
+        oasp_object *http = oasp_builtin_http_create(runtime, registration->canonical_name);
+        return http ? oasp_component_object_value(http) : oasp_value_empty();
+    }
 
     oasp_object *object = oasp_component_object(runtime, registration->kind, registration->canonical_name, NULL);
     if (!object)
@@ -54,37 +58,21 @@ oasp_value oasp_component_create(oasp_runtime *runtime, oasp_slice prog_id, size
         object->native = oasp_builtin_xml_create(runtime);
         if (!object->native)
             return oasp_value_empty();
-    } else if (registration->kind == OASP_COMPONENT_HTTP) {
-        oasp_http *http = oasp_runtime_alloc(runtime, sizeof(*http), _Alignof(oasp_http));
-        if (!http || !oasp_buffer_init(&http->response, 4096))
-            return oasp_value_empty();
-        if (!oasp_buffer_init(&http->response_headers, 1024)) {
-            oasp_buffer_dispose(&http->response);
-            return oasp_value_empty();
-        }
-        http->headers = NULL;
-        http->method = (oasp_slice){"GET", 3};
-        http->url = (oasp_slice){"", 0};
-        http->content_type = (oasp_slice){"", 0};
-        http->ca_file = (oasp_slice){"", 0};
-        http->status = 0;
-        http->timeout_ms = 30000;
-        http->max_response_bytes = 16777216;
-        http->ready_state = 0;
-        http->tls_verify = true;
-        if (!oasp_runtime_account_external(runtime, http,
-                                           (ptrdiff_t)(http->response.capacity +
-                                                       http->response_headers.capacity))) {
-            oasp_buffer_dispose(&http->response);
-            oasp_buffer_dispose(&http->response_headers);
+    } else if (registration->kind == OASP_COMPONENT_HTTP_MULTI) {
+        oasp_gc_root root;
+        oasp_runtime_gc_root_enter(runtime, &root, NULL, 0, &object, 1, NULL, 0);
+        oasp_http_multi *multi = oasp_runtime_alloc(runtime, sizeof(*multi), _Alignof(oasp_http_multi));
+        if (!multi) {
+            oasp_runtime_gc_root_leave(runtime, &root);
             return oasp_value_empty();
         }
-        if (!oasp_runtime_defer(runtime, http, oasp_builtin_http_finalize, http)) {
-            oasp_buffer_dispose(&http->response);
-            oasp_buffer_dispose(&http->response_headers);
-            return oasp_value_empty();
-        }
-        object->native = http;
+        memset(multi, 0, sizeof(*multi));
+        multi->max_concurrency = 8;
+        multi->timeout_ms = 30000;
+        object->native = multi;
+        if (runtime->allocator)
+            oasp_allocator_write_barrier(runtime->allocator, object, multi);
+        oasp_runtime_gc_root_leave(runtime, &root);
     } else if (registration->kind == OASP_COMPONENT_OPENAI) {
         oasp_openai *openai = oasp_runtime_alloc(runtime, sizeof(*openai), _Alignof(oasp_openai));
         if (!openai)
@@ -124,6 +112,17 @@ oasp_value oasp_component_create(oasp_runtime *runtime, oasp_slice prog_id, size
         if (!oasp_runtime_defer(runtime, redis, oasp_builtin_redis_finalize, redis))
             return oasp_value_empty();
         object->native = redis;
+    } else if (registration->kind == OASP_COMPONENT_REDIS_MULTI) {
+        oasp_gc_root root;
+        oasp_runtime_gc_root_enter(runtime, &root, NULL, 0, &object, 1, NULL, 0);
+        object->native = oasp_builtin_redis_multi_create(runtime);
+        if (!object->native) {
+            oasp_runtime_gc_root_leave(runtime, &root);
+            return oasp_value_empty();
+        }
+        if (runtime->allocator)
+            oasp_allocator_write_barrier(runtime->allocator, object, object->native);
+        oasp_runtime_gc_root_leave(runtime, &root);
     } else if (registration->kind == OASP_COMPONENT_PROCESS) {
         oasp_process *process = oasp_runtime_alloc(runtime, sizeof(*process), _Alignof(oasp_process));
         if (!process)
@@ -160,6 +159,17 @@ oasp_value oasp_component_create(oasp_runtime *runtime, oasp_slice prog_id, size
         if (!oasp_runtime_defer(runtime, cache, oasp_builtin_memcache_finalize, cache))
             return oasp_value_empty();
         object->native = cache;
+    } else if (registration->kind == OASP_COMPONENT_MEMCACHE_MULTI) {
+        oasp_gc_root root;
+        oasp_runtime_gc_root_enter(runtime, &root, NULL, 0, &object, 1, NULL, 0);
+        object->native = oasp_builtin_memcache_multi_create(runtime);
+        if (!object->native) {
+            oasp_runtime_gc_root_leave(runtime, &root);
+            return oasp_value_empty();
+        }
+        if (runtime->allocator)
+            oasp_allocator_write_barrier(runtime->allocator, object, object->native);
+        oasp_runtime_gc_root_leave(runtime, &root);
     }
     return oasp_component_object_value(object);
 }

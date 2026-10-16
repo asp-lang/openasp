@@ -46,8 +46,17 @@ void oasp_builtin_component_gc_trace(oasp_allocator *allocator, const oasp_objec
         oasp_http *http = object->native;
         trace_slice(allocator, http->method);
         trace_slice(allocator, http->url);
+        trace_slice(allocator, http->body);
         trace_slice(allocator, http->content_type);
         trace_slice(allocator, http->ca_file);
+        oasp_allocator_trace(allocator, http->next_multi_request);
+        oasp_allocator_trace(allocator, http->multi_owner);
+        break;
+    }
+    case OASP_COMPONENT_HTTP_MULTI: {
+        oasp_http_multi *multi = object->native;
+        for (oasp_object *request = multi->first; request; request = ((oasp_http *)request->native)->next_multi_request)
+            oasp_allocator_trace(allocator, request);
         break;
     }
     case OASP_COMPONENT_OPENAI: {
@@ -136,6 +145,16 @@ void oasp_builtin_component_gc_trace(oasp_allocator *allocator, const oasp_objec
         trace_slice(allocator, redis->password);
         break;
     }
+    case OASP_COMPONENT_REDIS_MULTI:
+    case OASP_COMPONENT_REDIS_MULTI_CLIENT:
+    case OASP_COMPONENT_REDIS_MULTI_COMMAND:
+        oasp_builtin_redis_multi_gc_trace(allocator, object);
+        break;
+    case OASP_COMPONENT_MEMCACHE_MULTI:
+    case OASP_COMPONENT_MEMCACHE_MULTI_CLIENT:
+    case OASP_COMPONENT_MEMCACHE_MULTI_COMMAND:
+        oasp_builtin_memcache_multi_gc_trace(allocator, object);
+        break;
     case OASP_COMPONENT_MATCH_COLLECTION:
     case OASP_COMPONENT_SUBMATCH_COLLECTION:
     case OASP_COMPONENT_XML_NODE_LIST:

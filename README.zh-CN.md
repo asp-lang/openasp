@@ -366,6 +366,58 @@ OpenASP 直接实现经典 ASP 对象模型：
 - OpenAI 兼容 API
 - 默认关闭的 `OpenASP.Process` 和 `Shell.Application`
 
+可以使用基于 libcurl Multi 的 `OpenASP.HttpMulti`，在单个 worker 线程内并发执行多个出站 HTTP 请求：
+
+```asp
+Set multi = Server.CreateObject("OpenASP.HttpMulti")
+Set first = multi.CreateRequest("GET", "https://api-a.example/data")
+Set second = multi.CreateRequest("POST", "https://api-b.example/query")
+second.Body = "{""id"":123}"
+second.SetHeader "Content-Type", "application/json"
+multi.MaxConcurrency = 8
+multi.Timeout = 10000
+multi.Execute
+If first.ErrorCode = 0 Then Response.Write first.ResponseText
+```
+
+每个请求都提供 `Status`、`Completed`、`ErrorCode`、`ErrorMessage`、`ResponseText`、`ContentType`、`Timeout`、`TLSVerify` 和 `CAFile`。单个传输失败不会取消同一批次中已经成功的请求。
+
+可以使用 `OpenASP.RedisMulti` 并发访问多个 Redis endpoint。同一客户端的命令会自动组成 Pipeline，不同客户端在 Linux 上由 `epoll`、在 macOS 上由 `kqueue` 并发驱动：
+
+```asp
+Set multi = Server.CreateObject("OpenASP.RedisMulti")
+Set redisA = multi.CreateClient("Host=10.0.0.11;Port=6379;Database=0;Timeout=2000")
+Set redisB = multi.CreateClient("Host=10.0.0.12;Port=6379;Database=2;Timeout=2000")
+Set user = redisA.CreateCommand("HGETALL", "user:123")
+Set orders = redisA.CreateCommand("LRANGE", "user:123:orders", 0, 19)
+Set stock = redisB.CreateCommand("HGET", "product:456", "stock")
+multi.MaxConcurrency = 8
+multi.Timeout = 5000
+multi.MaxRequestBytes = 4194304
+multi.MaxResponseBytes = 16777216
+multi.Execute
+If user.ErrorCode = 0 Then values = user.Value
+```
+
+命令结果提供 `Value`、`Completed`、`ErrorCode`、`ErrorMessage` 和 `MaybeExecuted`。连接失败与 Redis 命令错误只影响对应客户端或命令。事务、订阅和阻塞命令无法安全复用 Pipeline 连接，因此组件会直接拒绝这些命令。
+
+`OpenASP.MemcacheMulti` 为 Memcache 文本协议提供相同的多 endpoint 并发与单客户端 Pipeline 模型：
+
+```asp
+Set multi = Server.CreateObject("OpenASP.MemcacheMulti")
+Set cacheA = multi.CreateClient("Host=10.0.0.21;Port=11211;Timeout=2000")
+Set cacheB = multi.CreateClient("Host=10.0.0.22;Port=11211;Timeout=2000")
+Set profile = cacheA.CreateCommand("gets", "user:123")
+Set stored = cacheA.CreateCommand("set", "session:123", "active", 0, 300)
+Set stock = cacheB.CreateCommand("get", "product:456:stock")
+multi.MaxConcurrency = 8
+multi.Timeout = 5000
+multi.Execute
+If profile.ErrorCode = 0 Then Response.Write profile.Value
+```
+
+当前支持 `get`、`gets`、`set`、`add`、`replace`、`append`、`prepend`、`cas`、`delete`、`touch`、`incr`、`decr`、`version` 和 `flush_all`。命令结果除通用状态属性外，还通过 `Flags` 与 `Cas` 暴露读取结果的 Memcache 元数据。该组件暂不支持 TLS 和 Memcache 二进制协议。
+
 可通过稳定 C ABI 加载外部原生扩展。
 
 ## 架构与文档

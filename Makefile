@@ -63,8 +63,10 @@ COMPONENT_SOURCES = src/components/mdb/mdb.c src/components/mdb/mdb_write_lock.c
 src/components/core/component_cleanup.c src/components/core/component_string.c src/components/core/component_factory.c \
 src/components/core/component_adapter.c \
 src/components/builtin/dictionary.c src/components/builtin/regexp.c src/components/builtin/stream.c src/components/builtin/fso.c \
-src/components/builtin/xml.c src/components/builtin/json.c src/components/builtin/http.c src/components/builtin/process.c \
-	src/components/builtin/socket.c src/components/builtin/websocket.c src/components/builtin/redis.c src/components/builtin/memcache.c \
+src/components/builtin/xml.c src/components/builtin/json.c src/components/builtin/http.c src/components/builtin/http_multi.c src/components/builtin/process.c \
+	src/components/builtin/socket.c src/components/builtin/websocket.c src/components/builtin/redis.c src/components/builtin/redis_multi.c \
+	src/components/builtin/redis_multi_event.c src/components/builtin/memcache.c src/components/builtin/memcache_multi.c \
+	src/components/builtin/memcache_multi_event.c \
 	src/components/builtin/ado/ado.c src/components/component.c
 BUILD ?= build
 else ifeq ($(PROFILE),minimal)

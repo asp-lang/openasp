@@ -5,6 +5,8 @@
 #include "builtin_internal.h"
 #include "component_object.h"
 
+#include <string.h>
+
 static bool component_get_properties(oasp_runtime *runtime, oasp_object *object, oasp_slice member, size_t line, oasp_value *result) {
     if (object->component_kind == OASP_COMPONENT_DICTIONARY && oasp_ascii_equal(member, "removeall"))
         return oasp_component_call(runtime, object, member, NULL, 0, line, result);
@@ -26,6 +28,8 @@ static bool component_get_properties(oasp_runtime *runtime, oasp_object *object,
         oasp_builtin_ado_get(runtime, object, member, line, result) ||
         oasp_builtin_process_get(object, member, result) ||
         oasp_builtin_redis_get_property(object, member, result) ||
+        oasp_builtin_redis_multi_get(object, member, result) ||
+        oasp_builtin_memcache_multi_get(object, member, result) ||
         oasp_builtin_memcache_get_property(object, member, result) ||
         oasp_builtin_websocket_get(object, member, result) ||
         oasp_builtin_socket_get(runtime, object, member, result))
@@ -44,8 +48,24 @@ static bool component_get_properties(oasp_runtime *runtime, oasp_object *object,
             *result = oasp_value_string(http->response.data, http->response.length);
             return true;
         }
+        if (oasp_ascii_equal(member, "body")) {
+            *result = oasp_value_string(http->body.data, http->body.length);
+            return true;
+        }
         if (oasp_ascii_equal(member, "contenttype")) {
             *result = oasp_value_string(http->content_type.data, http->content_type.length);
+            return true;
+        }
+        if (oasp_ascii_equal(member, "completed")) {
+            *result = oasp_value_bool(http->completed);
+            return true;
+        }
+        if (oasp_ascii_equal(member, "errorcode")) {
+            *result = oasp_value_int(http->error_code);
+            return true;
+        }
+        if (oasp_ascii_equal(member, "errormessage")) {
+            *result = oasp_value_string(http->error_message, strlen(http->error_message));
             return true;
         }
         if (oasp_ascii_equal(member, "tlsverify")) {
@@ -65,6 +85,8 @@ static bool component_get_properties(oasp_runtime *runtime, oasp_object *object,
             return true;
         }
     }
+    if (oasp_builtin_http_multi_get(object, member, result))
+        return true;
     if (object->component_kind == OASP_COMPONENT_OPENAI) {
         oasp_openai *openai = object->native;
         if (oasp_ascii_equal(member, "status")) {
@@ -123,6 +145,9 @@ bool oasp_builtin_component_set(oasp_runtime *runtime, oasp_object *object, oasp
         oasp_builtin_xml_set(runtime, object, member, value, line) ||
         oasp_builtin_ado_set(runtime, object, member, value, line) ||
         oasp_builtin_http_set(runtime, object, member, value, line) ||
+        oasp_builtin_http_multi_set(runtime, object, member, value, line) ||
+        oasp_builtin_redis_multi_set(runtime, object, member, value, line) ||
+        oasp_builtin_memcache_multi_set(runtime, object, member, value, line) ||
         oasp_builtin_process_set(runtime, object, member, value, line) ||
         oasp_builtin_websocket_set(runtime, object, member, value, line) ||
         oasp_builtin_socket_set(runtime, object, member, value, line) ||
@@ -160,6 +185,14 @@ bool oasp_builtin_component_call_id(oasp_runtime *runtime, oasp_object *object, 
          oasp_builtin_memcache_call(runtime, object, member, arguments, argument_count, line, result)) ||
         (object->component_kind == OASP_COMPONENT_REDIS &&
          oasp_builtin_redis_call(runtime, object, member, arguments, argument_count, line, result)) ||
+        ((object->component_kind == OASP_COMPONENT_REDIS_MULTI ||
+          object->component_kind == OASP_COMPONENT_REDIS_MULTI_CLIENT) &&
+         oasp_builtin_redis_multi_call(runtime, object, member, arguments, argument_count, line, result)) ||
+        ((object->component_kind == OASP_COMPONENT_MEMCACHE_MULTI ||
+          object->component_kind == OASP_COMPONENT_MEMCACHE_MULTI_CLIENT) &&
+         oasp_builtin_memcache_multi_call(runtime, object, member, arguments, argument_count, line, result)) ||
+        (object->component_kind == OASP_COMPONENT_HTTP_MULTI &&
+         oasp_builtin_http_multi_call(runtime, object, member, arguments, argument_count, line, result)) ||
         ((object->component_kind == OASP_COMPONENT_HTTP || object->component_kind == OASP_COMPONENT_OPENAI) &&
          oasp_builtin_http_call(runtime, object, member, arguments, argument_count, line, result)) ||
         oasp_builtin_stream_call(runtime, object, member, arguments, argument_count, line, result) ||

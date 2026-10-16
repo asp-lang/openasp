@@ -130,22 +130,16 @@ oasp_kv_pool_entry *oasp_kv_pool_acquire(oasp_component_context *context, bool r
         component_context_check_pid(context);
         pool = redis ? &context->redis_pool : &context->memcache_pool;
         size = redis ? &context->redis_pool_size : &context->memcache_pool_size;
+        oasp_kv_pool_entry *replaceable = NULL;
         for (oasp_kv_pool_entry *entry = *pool; entry; entry = entry->next) {
-            if (strcmp(entry->endpoint, endpoint))
+            if (strcmp(entry->endpoint, endpoint) || entry->borrowers)
                 continue;
-            if (entry->borrowers) {
-                errno = EBUSY;
-                return NULL;
-            }
             if (strcmp(entry->identity, identity)) {
-                char *replacement = strdup(identity);
-                if (!replacement)
-                    return NULL;
-                free(entry->identity);
-                entry->identity = replacement;
-                oasp_kv_pool_entry_close(entry);
+                if (!replaceable)
+                    replaceable = entry;
+                continue;
             }
-            if (!entry->borrowers && entry->fd >= 0) {
+            if (entry->fd >= 0) {
                 unsigned char byte;
                 ssize_t peek = recv(entry->fd, &byte, 1, MSG_PEEK | MSG_DONTWAIT);
                 if (peek == 0 || peek > 0 || (peek < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR))
@@ -153,6 +147,16 @@ oasp_kv_pool_entry *oasp_kv_pool_acquire(oasp_component_context *context, bool r
             }
             entry->borrowers = 1;
             return entry;
+        }
+        if (replaceable) {
+            char *replacement = strdup(identity);
+            if (!replacement)
+                return NULL;
+            free(replaceable->identity);
+            replaceable->identity = replacement;
+            oasp_kv_pool_entry_close(replaceable);
+            replaceable->borrowers = 1;
+            return replaceable;
         }
         if (!context->kv_pool_limit || *size >= context->kv_pool_limit) {
             errno = EMFILE;

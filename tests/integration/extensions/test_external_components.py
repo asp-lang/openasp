@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import socket
+import socketserver
 import subprocess
 import sys
 import tempfile
@@ -193,6 +194,251 @@ def check_http() -> None:
         thread.join(timeout=2)
 
 
+class HttpMultiHandler(BaseHTTPRequestHandler):
+    lock = threading.Lock()
+    active = 0
+    max_active = 0
+
+    def handle_parallel(self, expected_body: bytes | None) -> None:
+        if expected_body is not None:
+            length = int(self.headers.get("Content-Length", "0"))
+            assert self.rfile.read(length) == expected_body
+            assert self.headers.get("Content-Type") == "application/json"
+        with self.lock:
+            type(self).active += 1
+            type(self).max_active = max(type(self).max_active, type(self).active)
+        try:
+            time.sleep(0.6)
+            body = b"post-ok" if expected_body is not None else b"get-ok"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        finally:
+            with self.lock:
+                type(self).active -= 1
+
+    def do_GET(self) -> None:
+        assert self.path == "/parallel/first"
+        self.handle_parallel(None)
+
+    def do_POST(self) -> None:
+        assert self.path == "/parallel/second"
+        self.handle_parallel(b'{"id":123}')
+
+    def log_message(self, format: str, *args: object) -> None:
+        pass
+
+
+def check_http_multi() -> None:
+    HttpMultiHandler.active = 0
+    HttpMultiHandler.max_active = 0
+    server = ThreadingHTTPServer(("127.0.0.1", 0), HttpMultiHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        expect(
+            "component_http_multi.asp",
+            "3:2:5000|200:True:0:get-ok|200:True:0:post-ok|True:7",
+            {"port": server.server_port},
+        )
+        assert HttpMultiHandler.max_active == 2, (
+            f"expected two concurrent HTTP requests, got {HttpMultiHandler.max_active}"
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+class RedisMultiHandler(socketserver.BaseRequestHandler):
+    def handle(self) -> None:
+        stream = self.request.makefile("rb")
+        try:
+            for _ in range(self.server.command_count):
+                header = stream.readline()
+                assert header.startswith(b"*") and header.endswith(b"\r\n"), header
+                argument_count = int(header[1:-2])
+                for _ in range(argument_count):
+                    bulk = stream.readline()
+                    assert bulk.startswith(b"$") and bulk.endswith(b"\r\n"), bulk
+                    length = int(bulk[1:-2])
+                    assert len(stream.read(length)) == length
+                    assert stream.read(2) == b"\r\n"
+            tracker = self.server.tracker
+            with tracker["lock"]:
+                tracker["active"] += 1
+                tracker["maximum"] = max(tracker["maximum"], tracker["active"])
+            try:
+                time.sleep(1.0)
+                self.request.sendall(self.server.response)
+            finally:
+                with tracker["lock"]:
+                    tracker["active"] -= 1
+        finally:
+            stream.close()
+
+
+class RedisMultiServer(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
+def check_redis_multi() -> None:
+    tracker = {"lock": threading.Lock(), "active": 0, "maximum": 0}
+    servers = []
+    threads = []
+    specifications = [
+        (2, b"+PONG\r\n$5\r\nalpha\r\n"),
+        (
+            3,
+            b"-WRONGTYPE Operation against a key holding the wrong kind of value\r\n"
+            b"$2\r\n42\r\n*2\r\n$3\r\none\r\n$3\r\ntwo\r\n",
+        ),
+    ]
+    for command_count, response in specifications:
+        server = RedisMultiServer(("127.0.0.1", 0), RedisMultiHandler)
+        server.command_count = command_count
+        server.response = response
+        server.tracker = tracker
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        servers.append(server)
+        threads.append(thread)
+    unused = socket.socket()
+    unused.bind(("127.0.0.1", 0))
+    failed_port = unused.getsockname()[1]
+    unused.close()
+    started = time.monotonic()
+    try:
+        expect(
+            "component_redis_multi.asp",
+            "3:6:2:5000:4194304:16777216|PONG:alpha|3000:"
+            "WRONGTYPE Operation against a key holding the wrong kind of value:"
+            "42:one,two|True:True:False",
+            {
+                "port_a": servers[0].server_address[1],
+                "port_b": servers[1].server_address[1],
+                "failed_port": failed_port,
+            },
+        )
+        elapsed = time.monotonic() - started
+        assert tracker["maximum"] == 2, tracker
+        assert elapsed < 2.2, f"Redis endpoints were not concurrent: {elapsed:.3f}s"
+    finally:
+        for server in servers:
+            server.shutdown()
+            server.server_close()
+        for thread in threads:
+            thread.join(timeout=2)
+
+
+class MemcacheMultiHandler(socketserver.BaseRequestHandler):
+    def handle(self) -> None:
+        stream = self.request.makefile("rb")
+        try:
+            for _ in range(self.server.command_count):
+                line = stream.readline()
+                assert line.endswith(b"\r\n"), line
+                fields = line[:-2].split()
+                assert fields, line
+                if fields[0].lower() in {b"set", b"add", b"replace", b"append", b"prepend", b"cas"}:
+                    length = int(fields[4])
+                    assert len(stream.read(length)) == length
+                    assert stream.read(2) == b"\r\n"
+            tracker = self.server.tracker
+            with tracker["lock"]:
+                tracker["active"] += 1
+                tracker["maximum"] = max(tracker["maximum"], tracker["active"])
+            try:
+                time.sleep(1.0)
+                self.request.sendall(self.server.response)
+            finally:
+                with tracker["lock"]:
+                    tracker["active"] -= 1
+        finally:
+            stream.close()
+
+
+class MemcacheMultiServer(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
+def check_memcache_multi() -> None:
+    tracker = {"lock": threading.Lock(), "active": 0, "maximum": 0}
+    servers = []
+    threads = []
+    specifications = [
+        (
+            4,
+            b"VALUE first 7 5\r\nalpha\r\nEND\r\n"
+            b"VALUE second 8 4 99\r\nbeta\r\nEND\r\n"
+            b"STORED\r\nNOT_FOUND\r\n",
+        ),
+        (
+            5,
+            b"42\r\nTOUCHED\r\nVERSION 1.6.21\r\nOK\r\n"
+            b"SERVER_ERROR backend failure\r\n",
+        ),
+    ]
+    for command_count, response in specifications:
+        server = MemcacheMultiServer(("127.0.0.1", 0), MemcacheMultiHandler)
+        server.command_count = command_count
+        server.response = response
+        server.tracker = tracker
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        servers.append(server)
+        threads.append(thread)
+    unused = socket.socket()
+    unused.bind(("127.0.0.1", 0))
+    failed_port = unused.getsockname()[1]
+    unused.close()
+    started = time.monotonic()
+    try:
+        expect(
+            "component_memcache_multi.asp",
+            "3:10:2:5000:4194304:16777216|alpha:7:0|beta:8:99|True:False"
+            "|42:True:1.6.21:True|13000:SERVER_ERROR backend failure|True:True:False",
+            {
+                "port_a": servers[0].server_address[1],
+                "port_b": servers[1].server_address[1],
+                "failed_port": failed_port,
+            },
+        )
+        elapsed = time.monotonic() - started
+        assert tracker["maximum"] == 2, tracker
+        assert elapsed < 2.2, f"Memcache endpoints were not concurrent: {elapsed:.3f}s"
+    finally:
+        for server in servers:
+            server.shutdown()
+            server.server_close()
+        for thread in threads:
+            thread.join(timeout=2)
+
+
+def check_memcache_multi_limits() -> None:
+    tracker = {"lock": threading.Lock(), "active": 0, "maximum": 0}
+    server = MemcacheMultiServer(("127.0.0.1", 0), MemcacheMultiHandler)
+    server.command_count = 1
+    server.response = b"END\r\n"
+    server.tracker = tracker
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        expect(
+            "component_memcache_multi_limits.asp",
+            "7:True:True:True",
+            {"port": server.server_address[1]},
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
 def check_http_status_properties() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), HttpHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -356,6 +602,11 @@ def check_socket_udp() -> None:
 def check_redis_and_mysql() -> None:
     redis_port = ensure_redis()
     check_redis_configuration_properties(redis_port)
+    expect(
+        "component_redis_multi_real.asp",
+        "0:2:one,two:OK:42",
+        {"port": redis_port},
+    )
     expect(
         "component_redis.asp",
         "1:OK:hello:10:9:1:ttl:1:egret:name=egret:1:2:3:"
@@ -660,6 +911,10 @@ def main() -> None:
         assert FIXTURES.exists(), f"reference fixtures missing: {FIXTURES}"
         check_reference_backend_harness()
         check_http()
+        check_http_multi()
+        check_redis_multi()
+        check_memcache_multi()
+        check_memcache_multi_limits()
         check_http_status_properties()
         check_http_tls_configuration_properties()
         check_memcache_configuration_properties()
@@ -670,7 +925,7 @@ def main() -> None:
         check_shell()
         check_process_status_properties()
         check_mdb()
-        print("PASS: all 22 external fixtures")
+        print("PASS: all 25 external fixtures")
     finally:
         if OWNED_REDIS is not None and OWNED_REDIS.poll() is None:
             OWNED_REDIS.terminate()

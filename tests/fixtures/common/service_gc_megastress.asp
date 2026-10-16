@@ -173,7 +173,8 @@ Dim iterations, temporaryPath, parentIterations, forkMode, forkWorkerIndex, fork
 Dim values(), matrix(1, 2), tokens
 Dim i, j, phase, slotIndex, checksum, mutations, category, componentSignature
 Dim textValue, parts, token, garbage, head, tail, dictionary, invalidValue, capturedError
-Dim captured, http, ai, socket, redis, cache, websocket, process, shell
+Dim captured, http, ai, socket, redis, redisMulti, redisMultiClient, redisMultiCommand
+Dim cache, cacheMulti, cacheMultiClient, cacheMultiCommand, websocket, process, shell
 
 forkMode = LCase(CStr(Request.QueryString("role"))) = "fork"
 forkWorkerIndex = 0
@@ -235,6 +236,20 @@ redis.Open "Host=127.0.0.1;Port=1;Database=0;Timeout=20"
 If Err.Number <> 0 Then componentSignature = componentSignature + 1
 Err.Clear
 redis.Close
+
+Set redisMulti = Server.CreateObject("OpenASP.RedisMulti")
+Set redisMultiClient = redisMulti.CreateClient("Host=127.0.0.1;Port=1;Database=0;Timeout=20")
+Set redisMultiCommand = redisMultiClient.CreateCommand("PING")
+redisMulti.Timeout = 20
+redisMulti.Execute
+If redisMultiCommand.Completed Then componentSignature = componentSignature + 1
+
+Set cacheMulti = Server.CreateObject("OpenASP.MemcacheMulti")
+Set cacheMultiClient = cacheMulti.CreateClient("Host=127.0.0.1;Port=1;Timeout=20")
+Set cacheMultiCommand = cacheMultiClient.CreateCommand("get", "probe")
+cacheMulti.Timeout = 20
+cacheMulti.Execute
+If cacheMultiCommand.Completed Then componentSignature = componentSignature + 1
 
 Set cache = Server.CreateObject("OpenASP.Memcache")
 cache.Host = "127.0.0.1"
