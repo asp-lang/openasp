@@ -372,6 +372,7 @@ Portable native components include:
 Concurrent outbound HTTP requests can be executed in one worker thread with the libcurl Multi-based `OpenASP.HttpMulti` component:
 
 ```asp
+<%
 Set multi = Server.CreateObject("OpenASP.HttpMulti")
 Set first = multi.CreateRequest("GET", "https://api-a.example/data")
 Set second = multi.CreateRequest("POST", "https://api-b.example/query")
@@ -381,6 +382,7 @@ multi.MaxConcurrency = 8
 multi.Timeout = 10000
 multi.Execute
 If first.ErrorCode = 0 Then Response.Write first.ResponseText
+%>
 ```
 
 Each request exposes `Status`, `Completed`, `ErrorCode`, `ErrorMessage`, `ResponseText`, `ContentType`, `Timeout`, `TLSVerify`, and `CAFile`. A failed transfer does not cancel successful requests in the same batch.
@@ -388,6 +390,7 @@ Each request exposes `Status`, `Completed`, `ErrorCode`, `ErrorMessage`, `Respon
 Multiple Redis endpoints can be accessed concurrently with `OpenASP.RedisMulti`. Commands for the same client are automatically pipelined, while different clients are driven concurrently by `epoll` on Linux and `kqueue` on macOS:
 
 ```asp
+<%
 Set multi = Server.CreateObject("OpenASP.RedisMulti")
 Set redisA = multi.CreateClient("Host=10.0.0.11;Port=6379;Database=0;Timeout=2000")
 Set redisB = multi.CreateClient("Host=10.0.0.12;Port=6379;Database=2;Timeout=2000")
@@ -400,6 +403,7 @@ multi.MaxRequestBytes = 4194304
 multi.MaxResponseBytes = 16777216
 multi.Execute
 If user.ErrorCode = 0 Then values = user.Value
+%>
 ```
 
 Command results expose `Value`, `Completed`, `ErrorCode`, `ErrorMessage`, and `MaybeExecuted`. Connection failures and Redis command errors remain isolated to the affected client or command. Stateful, subscription, and blocking commands are rejected because they cannot safely share a pipeline connection.
@@ -407,6 +411,7 @@ Command results expose `Value`, `Completed`, `ErrorCode`, `ErrorMessage`, and `M
 `OpenASP.MemcacheMulti` provides the same endpoint concurrency and per-client Pipeline model for the Memcache text protocol:
 
 ```asp
+<%
 Set multi = Server.CreateObject("OpenASP.MemcacheMulti")
 Set cacheA = multi.CreateClient("Host=10.0.0.21;Port=11211;Timeout=2000")
 Set cacheB = multi.CreateClient("Host=10.0.0.22;Port=11211;Timeout=2000")
@@ -417,6 +422,7 @@ multi.MaxConcurrency = 8
 multi.Timeout = 5000
 multi.Execute
 If profile.ErrorCode = 0 Then Response.Write profile.Value
+%>
 ```
 
 Supported commands are `get`, `gets`, `set`, `add`, `replace`, `append`, `prepend`, `cas`, `delete`, `touch`, `incr`, `decr`, `version`, and `flush_all`. Command results expose the common status properties plus `Flags` and `Cas` for retrieval commands. TLS and the Memcache binary protocol are not supported by this component.
