@@ -18,6 +18,13 @@ import termios
 ANSI = re.compile(rb"\x1b\[[0-9;]*m")
 
 
+def source_version() -> bytes:
+    version_header = Path(__file__).resolve().parents[3] / "src" / "cmd" / "version.h"
+    match = re.search(r'^#define OPENASP_VERSION "([^"]+)"$', version_header.read_text(), re.MULTILINE)
+    assert match, f"OPENASP_VERSION missing from {version_header}"
+    return match.group(1).encode()
+
+
 def run_in_terminal(command: list[str], columns: int = 100, rows: int = 24) -> bytes:
     master, slave = pty.openpty()
     size = struct.pack("HHHH", rows, columns, 0, 0)
@@ -62,11 +69,12 @@ def main() -> int:
     logo_padding = b" " * ((100 - 59) // 2)
     copyright_text = b"Copyright (C) 2026 https://asp-lang.org"
     copyright_padding = b" " * ((100 - len(copyright_text) - 2) // 2)
+    version_text = b"OpenASP " + source_version()
     for binary in binaries:
         output = run_in_terminal([str(binary), "--help"])
         assert b"\x1b[38;5;" in output, f"{binary.name}: colored logo missing: {output!r}"
         assert output.count(b"\x1b[0m") >= 6, f"{binary.name}: incomplete logo: {output!r}"
-        assert b"OpenASP 0.1.0" in output, f"{binary.name}: version missing: {output!r}"
+        assert version_text in output, f"{binary.name}: version missing: {output!r}"
         assert output.startswith(logo_padding + b"\x1b[38;5;45m"), (
             f"{binary.name}: logo is not centered: {output!r}"
         )

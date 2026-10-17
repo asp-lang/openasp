@@ -45,23 +45,23 @@ OpenASP 发行包使用以下命名：
 
 | 平台 | 压缩包 |
 | --- | --- |
-| Linux x86-64 | [`openasp-0.1.0-linux-x86-64.tar.gz`](https://github.com/asp-lang/openasp/releases/download/v-0.1.0/openasp-0.1.0-linux-x86-64.tar.gz) |
-| MacOS Apple Silicon | [`openasp-0.1.0-macos-arm64.zip`](https://github.com/asp-lang/openasp/releases/download/v-0.1.0/openasp-0.1.0-macos-arm64.zip) |
+| Linux x86-64 | [`openasp-0.2.0-linux-x86-64.tar.gz`](https://github.com/asp-lang/openasp/releases/download/v-0.2.0/openasp-0.2.0-linux-x86-64.tar.gz) |
+| MacOS Apple Silicon | [`openasp-0.2.0-macos-arm64.zip`](https://github.com/asp-lang/openasp/releases/download/v-0.2.0/openasp-0.2.0-macos-arm64.zip) |
 
 从项目发布页面或 [https://asp-lang.org](https://asp-lang.org) 下载对应平台的压缩包，然后解压：
 
 ```sh
 # Linux x86-64
-tar -xzf openasp-0.1.0-linux-x86-64.tar.gz
+tar -xzf openasp-0.2.0-linux-x86-64.tar.gz
 
 # MacOS Apple Silicon
-unzip openasp-0.1.0-macos-arm64.zip
+unzip openasp-0.2.0-macos-arm64.zip
 ```
 
 每个发行包都在 `bin/` 中提供五个程序，在 `include/` 中提供公开扩展头文件，并附带一份 FPM 配置示例。将 `bin/` 加入 `PATH` 并验证安装：
 
 ```sh
-export PATH="/path/to/openasp-0.1.0-linux-x86-64/bin:$PATH"
+export PATH="/path/to/openasp-0.2.0-linux-x86-64/bin:$PATH"
 openasp --help
 ```
 
@@ -447,7 +447,7 @@ ASP 模板和 include 会被解析并编译为经过校验的字节码。独立�
 
 ## 版本
 
-当前源码版本为 `0.1.0`，由 `src/cmd/version.h` 中的 `OPENASP_VERSION` 定义。
+当前源码版本为 `0.2.0`，由 `src/cmd/version.h` 中的 `OPENASP_VERSION` 定义。
 
 ## 更多尝试
 

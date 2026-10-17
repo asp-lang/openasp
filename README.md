@@ -45,23 +45,23 @@ OpenASP release archives use the following names:
 
 | Platform | Archive |
 | --- | --- |
-| Linux x86-64 | [`openasp-0.1.0-linux-x86-64.tar.gz`](https://github.com/asp-lang/openasp/releases/download/v-0.1.0/openasp-0.1.0-linux-x86-64.tar.gz) |
-| MacOS Apple Silicon | [`openasp-0.1.0-macos-arm64.zip`](https://github.com/asp-lang/openasp/releases/download/v-0.1.0/openasp-0.1.0-macos-arm64.zip) |
+| Linux x86-64 | [`openasp-0.2.0-linux-x86-64.tar.gz`](https://github.com/asp-lang/openasp/releases/download/v-0.2.0/openasp-0.2.0-linux-x86-64.tar.gz) |
+| MacOS Apple Silicon | [`openasp-0.2.0-macos-arm64.zip`](https://github.com/asp-lang/openasp/releases/download/v-0.2.0/openasp-0.2.0-macos-arm64.zip) |
 
 Download the matching archive from the project release page or [https://asp-lang.org](https://asp-lang.org), then extract it:
 
 ```sh
 # Linux x86-64
-tar -xzf openasp-0.1.0-linux-x86-64.tar.gz
+tar -xzf openasp-0.2.0-linux-x86-64.tar.gz
 
 # MacOS Apple Silicon
-unzip openasp-0.1.0-macos-arm64.zip
+unzip openasp-0.2.0-macos-arm64.zip
 ```
 
 Each package contains the five programs under `bin/`, the public extension headers under `include/`, and an example FPM configuration. Add `bin/` to `PATH` and verify the installation:
 
 ```sh
-export PATH="/path/to/openasp-0.1.0-linux-x86-64/bin:$PATH"
+export PATH="/path/to/openasp-0.2.0-linux-x86-64/bin:$PATH"
 openasp --help
 ```
 
@@ -450,7 +450,7 @@ ASP templates and includes are parsed and compiled into validated bytecode. Stan
 
 ## Version
 
-The current source version is `0.1.0`, defined by `OPENASP_VERSION` in `src/cmd/version.h`.
+The current source version is `0.2.0`, defined by `OPENASP_VERSION` in `src/cmd/version.h`.
 
 ## More to Try
 
