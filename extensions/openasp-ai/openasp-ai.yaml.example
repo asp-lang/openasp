@@ -1,0 +1,22 @@
+# Replace the library path and SHA-256 digest with installed values.
+external-components:
+  enabled: on
+  require-sha256: on
+  modules:
+    - id: openasp-ai
+      library: /usr/local/lib/openasp/libopenasp_ai.dylib
+      mode: isolated
+      sha256: REPLACE_WITH_LOWERCASE_SHA256
+      capabilities:
+        - filesystem
+        - threads
+        - crypto
+      prog-ids:
+        - OpenASP.AI
+      max-instances: 64
+      max-message-bytes: 16777216
+      max-external-bytes: 2147483648
+      max-worker-external-bytes: 4294967296
+      max-model-external-bytes: 2147483648
+      max-device-external-bytes: 4294967296
+      call-timeout-ms: 300000

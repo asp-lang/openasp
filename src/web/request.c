@@ -295,6 +295,25 @@ int oasp_request_deadline_expired(const oasp_request *request) {
            (now.tv_sec == request->deadline.tv_sec && now.tv_nsec >= request->deadline.tv_nsec);
 }
 
+long long oasp_request_deadline_milliseconds(const oasp_request *request) {
+    if (!request || !request->has_deadline)
+        return -1;
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now))
+        return -1;
+    int64_t seconds = (int64_t)request->deadline.tv_sec - (int64_t)now.tv_sec;
+    int64_t nanoseconds = (int64_t)request->deadline.tv_nsec - (int64_t)now.tv_nsec;
+    if (nanoseconds < 0) {
+        seconds--;
+        nanoseconds += 1000000000;
+    }
+    if (seconds < 0)
+        return 0;
+    if (seconds > (INT64_MAX - nanoseconds / 1000000) / 1000)
+        return INT64_MAX;
+    return seconds * 1000 + nanoseconds / 1000000;
+}
+
 int oasp_request_failed(const oasp_request *request) {
     return request && (request->request_error ||
                        (request->memory_enabled && request->memory.allocation_failures));

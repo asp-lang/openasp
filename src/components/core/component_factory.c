@@ -81,6 +81,9 @@ oasp_value oasp_component_create(oasp_runtime *runtime, oasp_slice prog_id, size
         openai->base_url = (oasp_slice){"https://api.openai.com/v1", 25};
         openai->model = (oasp_slice){"gpt-4o-mini", 11};
         openai->timeout_ms = 120000;
+        openai->idle_timeout_ms = 30000;
+        openai->max_event_bytes = 1048576;
+        openai->max_buffered_bytes = 4194304;
         openai->max_response_bytes = 16777216;
         object->native = openai;
     } else if (registration->kind == OASP_COMPONENT_ADO_CONNECTION ||

@@ -99,6 +99,22 @@ int main(void) {
     assert(oasp_allocator_account_external(allocator, roots.node, -4096));
     (void)old_child;
 
+    size_t pressure_finalized = 0;
+    gc_node *pressure_dead = oasp_allocator_alloc(allocator, sizeof(*pressure_dead), _Alignof(gc_node), trace_node);
+    assert(pressure_dead);
+    assert(oasp_allocator_set_finalizer(allocator, pressure_dead, count_finalizer, &pressure_finalized));
+    size_t major_before_pressure = stats.major_collections;
+    oasp_allocator_note_external_pressure(allocator, config.major_threshold - 1);
+    assert(pressure_finalized == 0);
+    oasp_allocator_note_external_pressure(allocator, 1);
+    do {
+        oasp_allocator_safepoint(allocator);
+        oasp_allocator_get_stats(allocator, &stats);
+    } while (stats.major_collections == major_before_pressure);
+    oasp_allocator_get_stats(allocator, &stats);
+    assert(pressure_finalized == 1);
+    assert(stats.major_collections == major_before_pressure + 1);
+
     roots.node = NULL;
     oasp_allocator_collect(allocator, true);
     oasp_allocator_get_stats(allocator, &stats);

@@ -57,6 +57,7 @@ struct oasp_allocator {
     oasp_allocator_roots_fn roots;
     void *roots_context;
     oasp_gc_phase phase;
+    size_t unowned_external_pressure;
     bool collecting_minor;
     bool collection_failed;
     bool failed;
@@ -266,9 +267,10 @@ static void oasp_gc_finish_collection(oasp_allocator *allocator, bool major) {
     oasp_gc_sweep(allocator, major);
     allocator->collecting_minor = false;
     allocator->phase = OASP_GC_IDLE;
-    if (major)
+    if (major) {
+        allocator->unowned_external_pressure = 0;
         allocator->stats.major_collections++;
-    else
+    } else
         allocator->stats.minor_collections++;
 }
 
@@ -440,6 +442,15 @@ bool oasp_allocator_account_external(oasp_allocator *allocator, void *owner, ptr
     return true;
 }
 
+void oasp_allocator_note_external_pressure(oasp_allocator *allocator, size_t bytes) {
+    if (!allocator || allocator->kind != OASP_ALLOCATOR_GC || !bytes)
+        return;
+    if (bytes > SIZE_MAX - allocator->unowned_external_pressure)
+        allocator->unowned_external_pressure = SIZE_MAX;
+    else
+        allocator->unowned_external_pressure += bytes;
+}
+
 size_t oasp_allocator_object_size(const oasp_allocator *allocator, const void *object) {
     oasp_gc_header *header = oasp_gc_find(allocator, object);
     return header ? header->size : 0;
@@ -479,8 +490,9 @@ void oasp_allocator_safepoint(oasp_allocator *allocator) {
     if (allocator->stats.young_bytes >= allocator->config.young_limit)
         oasp_allocator_collect(allocator, false);
     if (allocator->phase == OASP_GC_IDLE &&
-        allocator->stats.old_bytes + allocator->stats.external_bytes >=
-            allocator->config.major_threshold) {
+        (allocator->stats.old_bytes + allocator->stats.external_bytes >=
+             allocator->config.major_threshold ||
+         allocator->unowned_external_pressure >= allocator->config.major_threshold)) {
         allocator->mark_count = 0;
         allocator->collection_failed = false;
         for (oasp_gc_header *header = allocator->objects; header; header = header->next)

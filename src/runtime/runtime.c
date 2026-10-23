@@ -211,6 +211,8 @@ static void oasp_runtime_trace_roots(oasp_allocator *allocator, void *context) {
     oasp_allocator_trace(allocator, runtime->global_slot_bytecode);
     oasp_allocator_trace(allocator, runtime->error_description);
     oasp_allocator_trace(allocator, runtime->error_source);
+    for (void *entry = runtime->external_request_contexts; entry; entry = *(void **)entry)
+        oasp_allocator_trace(allocator, entry);
     for (size_t i = 0; i < runtime->global_slot_count; i++)
         oasp_allocator_trace(allocator, runtime->global_slots[i]);
     if (runtime->routines)
@@ -329,6 +331,11 @@ bool oasp_runtime_account_external(oasp_runtime *runtime, void *owner, ptrdiff_t
         return true;
     }
     return oasp_memory_reserve(runtime->memory, (size_t)delta, "external allocation");
+}
+
+void oasp_runtime_note_external_pressure(oasp_runtime *runtime, size_t bytes) {
+    if (runtime && runtime->allocator)
+        oasp_allocator_note_external_pressure(runtime->allocator, bytes);
 }
 
 void oasp_runtime_write_barrier(oasp_runtime *runtime, void *owner, const oasp_value *value) {
@@ -4444,6 +4451,15 @@ static bool oasp_object_set(oasp_runtime *runtime, oasp_object *object, oasp_sli
     binding->value = oasp_runtime_value_copy(runtime, value, false);
     oasp_runtime_write_barrier(runtime, binding, &binding->value);
     return true;
+}
+
+bool oasp_runtime_set_member(oasp_runtime *runtime, const oasp_value *receiver, oasp_slice member, const oasp_value *value, size_t line) {
+    if (!runtime || !receiver || receiver->kind != OASP_VALUE_OBJECT || !receiver->as.object || !value) {
+        if (runtime)
+            oasp_runtime_error(runtime, 424, "object required", line);
+        return false;
+    }
+    return oasp_object_set(runtime, receiver->as.object, member, value);
 }
 
 static bool oasp_assign_target(oasp_runtime *runtime, const oasp_expr *target, const oasp_value *value, size_t line) {

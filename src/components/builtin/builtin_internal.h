@@ -68,6 +68,12 @@ bool oasp_builtin_http_multi_call(oasp_runtime *runtime, oasp_object *object, oa
 char *oasp_builtin_openai_payload(oasp_runtime *runtime, oasp_openai *openai, const oasp_value *input, bool responses);
 bool oasp_builtin_openai_request(oasp_runtime *runtime, oasp_object *object, oasp_openai *openai, const char *endpoint, const char *payload,
                                  size_t line, oasp_value *result);
+oasp_object *oasp_builtin_openai_stream_create(oasp_runtime *runtime, oasp_object *owner, const char *endpoint, const char *payload, size_t line);
+void oasp_builtin_openai_stream_finalize(void *context);
+bool oasp_builtin_openai_stream_get(oasp_object *object, oasp_slice member, oasp_value *result);
+bool oasp_builtin_openai_stream_call(oasp_runtime *runtime, oasp_object *object, oasp_slice member, size_t argument_count, size_t line,
+                                     oasp_value *result);
+void oasp_builtin_openai_stream_gc_trace(oasp_allocator *allocator, const oasp_object *object);
 bool oasp_builtin_feature_enabled(const char *name);
 bool oasp_builtin_shell_execute(const char *executable, const char *arguments, const char *directory, int *launch_error);
 void oasp_builtin_process_finalize(void *context);

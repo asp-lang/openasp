@@ -419,10 +419,26 @@ bool oasp_builtin_http_set(oasp_runtime *runtime, oasp_object *object, oasp_slic
     }
     int64_t integer = 0;
     if (oasp_ascii_equal(member, "timeout")) {
-        if (!oasp_value_to_int(value, &integer) || integer <= 0)
+        if (!oasp_value_to_int(value, &integer) || integer <= 0 || integer > LONG_MAX)
             oasp_runtime_raise(runtime, 5, "invalid timeout", object->component_name, line);
         else
             openai->timeout_ms = (long)integer;
+        return true;
+    }
+    if (oasp_ascii_equal(member, "idletimeout")) {
+        if (!oasp_value_to_int(value, &integer) || integer <= 0 || integer > LONG_MAX)
+            oasp_runtime_raise(runtime, 5, "invalid stream idle timeout", object->component_name, line);
+        else
+            openai->idle_timeout_ms = (long)integer;
+        return true;
+    }
+    if (oasp_ascii_equal(member, "maxeventbytes") || oasp_ascii_equal(member, "maxbufferedbytes")) {
+        if (!oasp_value_to_int(value, &integer) || integer <= 0)
+            oasp_runtime_raise(runtime, 5, "invalid OpenAI stream buffer limit", object->component_name, line);
+        else if (oasp_ascii_equal(member, "maxeventbytes"))
+            openai->max_event_bytes = (size_t)integer;
+        else
+            openai->max_buffered_bytes = (size_t)integer;
         return true;
     }
     if (oasp_ascii_equal(member, "maxresponsebytes")) {
@@ -438,14 +454,32 @@ bool oasp_builtin_http_set(oasp_runtime *runtime, oasp_object *object, oasp_slic
 bool oasp_builtin_http_call(oasp_runtime *runtime, oasp_object *object, oasp_slice member, oasp_value *arguments, size_t argument_count,
                             size_t line, oasp_value *result) {
     if (object->component_kind == OASP_COMPONENT_OPENAI) {
-        if (!argument_count || (!oasp_ascii_equal(member, "chatcompletions") && !oasp_ascii_equal(member, "responses")))
+        bool chat_stream = oasp_ascii_equal(member, "openchatstream");
+        bool responses_stream = oasp_ascii_equal(member, "openresponsesstream");
+        bool custom_stream = oasp_ascii_equal(member, "openstream");
+        bool synchronous = oasp_ascii_equal(member, "chatcompletions") || oasp_ascii_equal(member, "responses");
+        if ((!synchronous && !chat_stream && !responses_stream && !custom_stream) ||
+            (custom_stream ? argument_count != 2 : argument_count != 1))
             return false;
         oasp_openai *openai = object->native;
-        bool responses = oasp_ascii_equal(member, "responses");
-        char *payload = oasp_builtin_openai_payload(runtime, openai, &arguments[0], responses);
+        bool responses = oasp_ascii_equal(member, "responses") || responses_stream;
+        char *payload = custom_stream ? oasp_value_format(runtime->arena, &arguments[1])
+                                      : oasp_builtin_openai_payload(runtime, openai, &arguments[0], responses);
         if (!payload) {
             oasp_runtime_raise(runtime, 7, "out of memory", object->component_name, line);
             *result = oasp_value_empty();
+            return true;
+        }
+        if (chat_stream || responses_stream || custom_stream) {
+            oasp_value rooted_payload = oasp_value_string(payload, strlen(payload));
+            oasp_object *rooted_owner = object;
+            oasp_gc_root root;
+            oasp_runtime_gc_root_enter(runtime, &root, &rooted_payload, 1, &rooted_owner, 1, NULL, 0);
+            char *endpoint = custom_stream ? oasp_value_format(runtime->arena, &arguments[0])
+                                           : responses_stream ? "/responses" : "/chat/completions";
+            oasp_object *stream = endpoint ? oasp_builtin_openai_stream_create(runtime, object, endpoint, payload, line) : NULL;
+            oasp_runtime_gc_root_leave(runtime, &root);
+            *result = stream ? oasp_component_object_value(stream) : oasp_value_empty();
             return true;
         }
         return oasp_builtin_openai_request(runtime, object, openai,

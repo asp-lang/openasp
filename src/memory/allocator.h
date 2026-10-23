@@ -94,6 +94,7 @@ char *oasp_allocator_copy(oasp_allocator *allocator, const char *data, size_t le
  */
 bool oasp_allocator_set_finalizer(oasp_allocator *allocator, void *object, oasp_finalizer_fn function, void *context);
 bool oasp_allocator_account_external(oasp_allocator *allocator, void *owner, ptrdiff_t delta);
+void oasp_allocator_note_external_pressure(oasp_allocator *allocator, size_t bytes);
 size_t oasp_allocator_object_size(const oasp_allocator *allocator, const void *object);
 void oasp_allocator_write_barrier(oasp_allocator *allocator, void *owner, const void *value);
 void oasp_allocator_trace(oasp_allocator *allocator, const void *object);

@@ -102,6 +102,9 @@ typedef struct {
     oasp_slice last_response;
     long status;
     long timeout_ms;
+    long idle_timeout_ms;
+    size_t max_event_bytes;
+    size_t max_buffered_bytes;
     size_t max_response_bytes;
 } oasp_openai;
 

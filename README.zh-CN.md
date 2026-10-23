@@ -58,7 +58,7 @@ tar -xzf openasp-0.2.0-linux-x86-64.tar.gz
 unzip openasp-0.2.0-macos-arm64.zip
 ```
 
-每个发行包都在 `bin/` 中提供五个程序，在 `include/` 中提供公开扩展头文件，并附带一份 FPM 配置示例。将 `bin/` 加入 `PATH` 并验证安装：
+每个发行包都在 `bin/` 中提供六个程序（包括隔离扩展使用的 `openasp-component-host`），在 `include/` 中提供公开扩展头文件，并附带示例配置。将 `bin/` 加入 `PATH` 并验证安装：
 
 ```sh
 export PATH="/path/to/openasp-0.2.0-linux-x86-64/bin:$PATH"
@@ -366,6 +366,29 @@ OpenASP 直接实现经典 ASP 对象模型：
 - OpenAI 兼容 API
 - 默认关闭的 `OpenASP.Process` 和 `Shell.Application`
 
+`OpenASP.OpenAI` 支持基于拉取模式的 SSE 流式请求，可用于 Chat Completions、Responses 和自定义 OpenAI 兼容 endpoint：
+
+```asp
+<%
+Response.Buffer = False
+Set ai = Server.CreateObject("OpenASP.OpenAI")
+ai.APIKey = Application("OPENAI_API_KEY")
+ai.Model = "gpt-4o-mini"
+ai.IdleTimeout = 30000
+Set stream = ai.OpenChatStream("解释原生 ASP 运行时")
+Do While stream.Read
+    If Len(stream.Delta) > 0 Then
+        Response.Write stream.Delta
+        Response.Flush
+    End If
+Loop
+If stream.ErrorCode <> 0 Then Response.Write stream.ErrorMessage
+stream.Close
+%>
+```
+
+Responses API 使用 `OpenResponsesStream(input)`，自定义 endpoint 使用 `OpenStream(endpoint, payload)`。每次成功的 `Read()` 只发布一个完整 SSE 事件，并通过 `Delta`、`Data`、`EventType`、`FinishReason` 和 `Usage` 暴露数据。遇到 `[DONE]`、EOF、`Close()` 或错误时，`Read()` 返回 `False`；可通过 `Completed`、`ErrorCode`、`ErrorMessage`、`Status` 和 `ResponseBytes` 区分结果。`Timeout`、`IdleTimeout`、`MaxEventBytes`、`MaxBufferedBytes` 和 `MaxResponseBytes` 分别限制总耗时、空闲时间、单事件大小、待处理输入和完整响应大小。待处理输入达到上限时，拉取模型会暂停 libcurl，因此 ASP 消费较慢也不会导致无界缓冲。
+
 可以使用基于 libcurl Multi 的 `OpenASP.HttpMulti`，在单个 worker 线程内并发执行多个出站 HTTP 请求：
 
 ```asp
@@ -424,7 +447,14 @@ If profile.ErrorCode = 0 Then Response.Write profile.Value
 
 当前支持 `get`、`gets`、`set`、`add`、`replace`、`append`、`prepend`、`cas`、`delete`、`touch`、`incr`、`decr`、`version` 和 `flush_all`。命令结果除通用状态属性外，还通过 `Flags` 与 `Cas` 暴露读取结果的 Memcache 元数据。该组件暂不支持 TLS 和 Memcache 二进制协议。
 
-可通过稳定 C ABI 加载外部原生扩展。
+外部原生扩展可通过 Extension ABI v2 以进程内或隔离模式加载，详见
+[SDK 指南](docs/extensions.zh-CN.md)与[实现设计](docs/ext-design.zh-CN.md)。
+
+OpenASP.AI 以 C11 外部扩展形式位于
+[`extensions/openasp-ai`](extensions/openasp-ai/README.zh-CN.md)。执行 `make AI=1`
+可同时构建引擎和 reference CPU AI runtime，`make ai-test` 运行专项测试。该扩展包含
+Tensor 与训练 API、计算图编译、Transformer/KV Cache、异步执行、Profiler 及设计文档
+规定的模型持久化格式；加速器实现通过独立的 Backend ABI 1.1 插件提供。
 
 ## 架构与文档
 

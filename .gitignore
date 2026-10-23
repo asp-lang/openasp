@@ -22,4 +22,9 @@
 *.tmp
 /logs/
 /stress-results/
-docs/
+docs/*
+docs/ext-design.md
+docs/ext-design.zh-CN.md
+docs/extensions.md
+docs/extensions.zh-CN.md
+docs/openasp.ai-design.md

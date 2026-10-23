@@ -65,14 +65,8 @@ bool oasp_component_assign(oasp_runtime *runtime, oasp_object *object, oasp_slic
         return false;
     if (oasp_builtin_ado_assign(runtime, object, member, arguments, argument_count, value, line))
         return true;
-    if (object->component_kind == OASP_COMPONENT_EXTERNAL) {
-        if (argument_count) {
-            oasp_runtime_raise(runtime, 438, "external component indexed assignment is unsupported",
-                               object->component_name, line);
-            return true;
-        }
-        return oasp_external_component_set(runtime, object, member, value, line);
-    }
+    if (object->component_kind == OASP_COMPONENT_EXTERNAL)
+        return oasp_external_component_assign(runtime, object, member, arguments, argument_count, value, line);
     if (object->component_kind == OASP_COMPONENT_DICTIONARY &&
         (!member.length || oasp_ascii_equal(member, "item"))) {
         if (!argument_count) {

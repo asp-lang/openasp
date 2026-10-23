@@ -67,6 +67,9 @@ void oasp_builtin_component_gc_trace(oasp_allocator *allocator, const oasp_objec
         trace_slice(allocator, openai->last_response);
         break;
     }
+    case OASP_COMPONENT_OPENAI_STREAM:
+        oasp_builtin_openai_stream_gc_trace(allocator, object);
+        break;
     case OASP_COMPONENT_ADO_CONNECTION: {
         oasp_ado_connection *connection = object->native;
         for (oasp_ado_recordset *recordset = connection->active_recordsets; recordset; recordset = recordset->next_active)

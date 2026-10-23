@@ -18,7 +18,7 @@
   <a href="#deploy-with-nginx">Nginx</a> |
   <a href="#compatibility-and-components">Compatibility</a> |
   <a href="https://asp-lang.org">Website</a> |
-  <a href="README.zh-CN.md">简体中文</a>
+  <a href="README.zh-CN.md">Simplified Chinese</a>
 </p>
 
 The official OpenASP website is **[https://asp-lang.org](https://asp-lang.org)**. Questions, suggestions, and ideas are always welcome. Please send feedback through the official website.
@@ -58,7 +58,7 @@ tar -xzf openasp-0.2.0-linux-x86-64.tar.gz
 unzip openasp-0.2.0-macos-arm64.zip
 ```
 
-Each package contains the five programs under `bin/`, the public extension headers under `include/`, and an example FPM configuration. Add `bin/` to `PATH` and verify the installation:
+Each package contains six programs under `bin/`, including `openasp-component-host` for isolated extensions, the public extension headers under `include/`, and example configurations. Add `bin/` to `PATH` and verify the installation:
 
 ```sh
 export PATH="/path/to/openasp-0.2.0-linux-x86-64/bin:$PATH"
@@ -369,6 +369,29 @@ Portable native components include:
 - OpenAI-compatible APIs
 - `OpenASP.Process` and `Shell.Application`, disabled by default
 
+`OpenASP.OpenAI` supports pull-based SSE streaming for Chat Completions, Responses, and custom OpenAI-compatible endpoints:
+
+```asp
+<%
+Response.Buffer = False
+Set ai = Server.CreateObject("OpenASP.OpenAI")
+ai.APIKey = Application("OPENAI_API_KEY")
+ai.Model = "gpt-4o-mini"
+ai.IdleTimeout = 30000
+Set stream = ai.OpenChatStream("Explain native ASP runtimes")
+Do While stream.Read
+    If Len(stream.Delta) > 0 Then
+        Response.Write stream.Delta
+        Response.Flush
+    End If
+Loop
+If stream.ErrorCode <> 0 Then Response.Write stream.ErrorMessage
+stream.Close
+%>
+```
+
+Use `OpenResponsesStream(input)` for the Responses API or `OpenStream(endpoint, payload)` for a custom endpoint. Each successful `Read()` exposes one complete SSE event through `Delta`, `Data`, `EventType`, `FinishReason`, and `Usage`. `Read()` returns `False` after `[DONE]`, EOF, `Close()`, or an error; inspect `Completed`, `ErrorCode`, `ErrorMessage`, `Status`, and `ResponseBytes` to distinguish the result. `Timeout`, `IdleTimeout`, `MaxEventBytes`, `MaxBufferedBytes`, and `MaxResponseBytes` bound total time, idle time, individual events, pending input, and the complete response. The pull model pauses libcurl when pending input reaches its limit, so a slow ASP consumer does not cause unbounded buffering.
+
 Concurrent outbound HTTP requests can be executed in one worker thread with the libcurl Multi-based `OpenASP.HttpMulti` component:
 
 ```asp
@@ -427,7 +450,17 @@ If profile.ErrorCode = 0 Then Response.Write profile.Value
 
 Supported commands are `get`, `gets`, `set`, `add`, `replace`, `append`, `prepend`, `cas`, `delete`, `touch`, `incr`, `decr`, `version`, and `flush_all`. Command results expose the common status properties plus `Flags` and `Cas` for retrieval commands. TLS and the Memcache binary protocol are not supported by this component.
 
-External native extensions can be loaded through the stable C ABI. 
+External native extensions can be loaded through Extension ABI v2 in either
+in-process or isolated mode. See [the SDK guide](docs/extensions.md) and
+[implementation design](docs/ext-design.md).
+
+OpenASP.AI is provided as the C11 extension under
+[`extensions/openasp-ai`](extensions/openasp-ai/README.md). Build the engine and
+the reference CPU AI runtime with `make AI=1`, then run its focused suite with
+`make ai-test`. It includes Tensor and training APIs, graph compilation,
+Transformer/KV-cache primitives, asynchronous execution, profiling, and the
+documented model persistence formats. Accelerator implementations remain
+separate Backend ABI 1.1 plugins.
 
 ## Architecture and Documentation
 

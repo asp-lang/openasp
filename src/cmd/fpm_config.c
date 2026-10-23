@@ -546,6 +546,13 @@ bool oasp_fpm_options_load_yaml(oasp_fpm_options *options, const char *path, boo
                 module = &grown[options->external_module_count++];
                 memset(module, 0, sizeof(*module));
                 module->id = strdup(value);
+                module->max_instances = 1024;
+                module->max_message_bytes = 16 * 1024 * 1024;
+                module->max_external_bytes = 256 * 1024 * 1024;
+                module->max_worker_external_bytes = 1024 * 1024 * 1024;
+                module->max_model_external_bytes = 768 * 1024 * 1024;
+                module->max_device_external_bytes = 1024 * 1024 * 1024;
+                module->call_timeout_ms = 30000;
                 external_list = EXTERNAL_NONE;
                 continue;
             }
@@ -577,6 +584,26 @@ bool oasp_fpm_options_load_yaml(oasp_fpm_options *options, const char *path, boo
                     success = replace_string(&module->library, value, error, error_size);
                 else if (!strcmp(key, "sha256"))
                     success = replace_string(&module->sha256, value, error, error_size);
+                else if (!strcmp(key, "max-instances"))
+                    success = set_size(&module->max_instances, key, value, error, error_size);
+                else if (!strcmp(key, "max-message-bytes"))
+                    success = set_size(&module->max_message_bytes, key, value, error, error_size);
+                else if (!strcmp(key, "max-external-bytes"))
+                    success = set_size(&module->max_external_bytes, key, value, error, error_size);
+                else if (!strcmp(key, "max-worker-external-bytes"))
+                    success = set_size(&module->max_worker_external_bytes, key, value, error, error_size);
+                else if (!strcmp(key, "max-model-external-bytes"))
+                    success = set_size(&module->max_model_external_bytes, key, value, error, error_size);
+                else if (!strcmp(key, "max-device-external-bytes"))
+                    success = set_size(&module->max_device_external_bytes, key, value, error, error_size);
+                else if (!strcmp(key, "call-timeout-ms")) {
+                    size_t timeout = 0;
+                    success = set_size(&timeout, key, value, error, error_size) && timeout <= ULONG_MAX;
+                    if (success)
+                        module->call_timeout_ms = (unsigned long)timeout;
+                    else if (timeout > ULONG_MAX)
+                        set_error(error, error_size, "%s:%zu: call-timeout-ms is too large", path, line_number);
+                }
                 else if (!strcmp(key, "mode")) {
                     if (!strcmp(value, "in-process")) module->mode = OASP_EXTERNAL_MODE_IN_PROCESS;
                     else if (!strcmp(value, "isolated")) module->mode = OASP_EXTERNAL_MODE_ISOLATED;

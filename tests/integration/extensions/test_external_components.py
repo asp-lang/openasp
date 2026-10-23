@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import importlib.util
+import json
 from pathlib import Path
 import os
 import re
@@ -246,6 +247,112 @@ def check_http_multi() -> None:
         assert HttpMultiHandler.max_active == 2, (
             f"expected two concurrent HTTP requests, got {HttpMultiHandler.max_active}"
         )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+class OpenAIStreamHandler(BaseHTTPRequestHandler):
+    def send_sse(self, chunks: list[bytes]) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.end_headers()
+        for chunk in chunks:
+            self.wfile.write(chunk)
+            self.wfile.flush()
+            time.sleep(0.005)
+
+    def do_POST(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        request = json.loads(self.rfile.read(length))
+        assert self.headers.get("Authorization") == "Bearer test-secret"
+        assert request["stream"] is True
+        if self.path == "/v1/chat/completions":
+            assert request["model"] == "mock-model"
+            self.send_sse([
+                b": keep-alive\r\n\r\n",
+                b'data: {"choices":[{"delta":{"content":"Hel"},\r\n',
+                b'data: "finish_reason":null}]}\r\n\r\n',
+                b'data: {"choices":[{"delta":{"content":"lo"},"finish_reason":null}]}\r',
+                b'\n\r\n',
+                b'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1}}\r\n\r\n',
+                b"data: [DO",
+                b"NE]\r\n\r\n",
+            ])
+        elif self.path == "/v1/responses":
+            assert request["input"] == "raw"
+            self.send_sse([
+                b"event: response.output_text.delta\n",
+                b'data: {"type":"response.output_text.delta","delta":"A"}\n\n',
+                b"event: response.completed\n",
+                b'data: {"type":"response.completed","response":{"usage":{"output_tokens":2}}}\n\n',
+            ])
+        elif self.path == "/v1/oversize":
+            self.send_sse([b"data: " + b"x" * 80 + b"\n\n"])
+        elif self.path == "/v1/idle":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            self.wfile.flush()
+            time.sleep(0.2)
+        elif self.path == "/v1/http-error":
+            body = b'{"error":{"message":"rate limited"}}'
+            self.send_response(429)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_error(404)
+
+    def log_message(self, format: str, *args: object) -> None:
+        pass
+
+
+def check_openai_stream() -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), OpenAIStreamHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        normal = run_fixture(
+            "component_openai_stream.asp",
+            {"port": server.server_port, "mode": "normal"},
+        )
+        assert normal.returncode == 0, normal.stderr
+        assert normal.stdout.startswith(
+            'message:Hel::|message:lo::|message::stop:{"prompt_tokens":1}|True:0:200:'
+        ), normal.stdout
+        assert (
+            '|response.output_text.delta:A:|response.completed::{"output_tokens":2}|True:0:200'
+            in normal.stdout
+        ), normal.stdout
+        service = run_fixture(
+            "component_openai_stream.asp",
+            {"port": server.server_port, "mode": "normal"},
+            "--runtime-mode=service", "--gc-young-size=16K",
+            "--gc-old-threshold=32K", "--gc-heap-limit=8M",
+        )
+        assert service.returncode == 0, service.stderr
+        assert service.stdout.startswith("message:Hel::|message:lo::|"), service.stdout
+        assert '|response.output_text.delta:A:|response.completed::{"output_tokens":2}|True:0:200' in service.stdout, service.stdout
+        expect(
+            "component_openai_stream.asp", "False:12006:True",
+            {"port": server.server_port, "mode": "limit"},
+        )
+        expect(
+            "component_openai_stream.asp", "False:12004:429",
+            {"port": server.server_port, "mode": "http"},
+        )
+        expect(
+            "component_openai_stream.asp", "False:12007:True",
+            {"port": server.server_port, "mode": "idle"},
+        )
+        expect(
+            "component_openai_stream.asp", "True:0:False",
+            {"port": server.server_port, "mode": "close"},
+        )
+        print("PASS component_openai_stream.asp")
     finally:
         server.shutdown()
         server.server_close()
@@ -912,6 +1019,7 @@ def main() -> None:
         check_reference_backend_harness()
         check_http()
         check_http_multi()
+        check_openai_stream()
         check_redis_multi()
         check_memcache_multi()
         check_memcache_multi_limits()
@@ -925,7 +1033,7 @@ def main() -> None:
         check_shell()
         check_process_status_properties()
         check_mdb()
-        print("PASS: all 25 external fixtures")
+        print("PASS: all 26 external fixtures")
     finally:
         if OWNED_REDIS is not None and OWNED_REDIS.poll() is None:
             OWNED_REDIS.terminate()

@@ -38,7 +38,7 @@ The reference `*.asp` fixtures listed in the above table are located in
 | `VBScript.RegExp`, match, match/submatch collection | `component_local_members.asp` | `component_regexp_capture.asp`, `component_regexp_unicode_escape.asp` | `test_core.c` |
 | `ADODB.Stream` | `component_local_members.asp` | `component_stream_copy.asp` | `component_error_paths.asp` |
 | XML DOM, XML nodes, node lists, parsing errors | `component_local_members.asp` | `component_dom.asp`, `component_xml_cdata.asp` | `test_core.c` |
-| HTTP/XMLHTTP and OpenAI Client | `component_http.asp`, `component_backend_services.asp` | `component_https.asp` | `test_external_components.py` mock failure path |
+| HTTP/XMLHTTP and OpenAI Client | `component_http.asp`, `component_backend_services.asp` | `component_https.asp`, `component_openai_stream.asp` | `test_external_components.py` mock failure path |
 | ADO Connection, Recordset, Command, Parameters | `component_mysql.asp`, `ado_sqlite.asp` | `ado_recordset_paging.asp`, `mysql_sliding_window.asp` | `component_mysql_empty_recordset.asp` |
 | `OpenASP.Socket` TCP/Unix/UDP/listener | `component_socket_client.asp` | `component_socket_listener.asp`, `component_socket_udp.asp` | `component_socket_error.asp` |
 | `OpenASP.Redis` | `component_redis.asp` | worker pool check | `test_external_components.py` Unavailable endpoint check |

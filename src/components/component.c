@@ -15,6 +15,9 @@ static bool component_get_properties(oasp_runtime *runtime, oasp_object *object,
          oasp_ascii_equal(member, "seteos") || oasp_ascii_equal(member, "readtext") ||
          oasp_ascii_equal(member, "read")))
         return oasp_component_call(runtime, object, member, NULL, 0, line, result);
+    if (object->component_kind == OASP_COMPONENT_OPENAI_STREAM &&
+        (oasp_ascii_equal(member, "read") || oasp_ascii_equal(member, "close")))
+        return oasp_component_call(runtime, object, member, NULL, 0, line, result);
     if ((object->component_kind == OASP_COMPONENT_ADO_CONNECTION && oasp_ascii_equal(member, "close")) ||
         (object->component_kind == OASP_COMPONENT_ADO_RECORDSET &&
          (oasp_ascii_equal(member, "close") || oasp_ascii_equal(member, "movenext") ||
@@ -31,6 +34,7 @@ static bool component_get_properties(oasp_runtime *runtime, oasp_object *object,
         oasp_builtin_redis_multi_get(object, member, result) ||
         oasp_builtin_memcache_multi_get(object, member, result) ||
         oasp_builtin_memcache_get_property(object, member, result) ||
+        oasp_builtin_openai_stream_get(object, member, result) ||
         oasp_builtin_websocket_get(object, member, result) ||
         oasp_builtin_socket_get(runtime, object, member, result))
         return true;
@@ -95,6 +99,26 @@ static bool component_get_properties(oasp_runtime *runtime, oasp_object *object,
         }
         if (oasp_ascii_equal(member, "lastresponse")) {
             *result = oasp_value_string(openai->last_response.data, openai->last_response.length);
+            return true;
+        }
+        if (oasp_ascii_equal(member, "timeout")) {
+            *result = oasp_value_int(openai->timeout_ms);
+            return true;
+        }
+        if (oasp_ascii_equal(member, "idletimeout")) {
+            *result = oasp_value_int(openai->idle_timeout_ms);
+            return true;
+        }
+        if (oasp_ascii_equal(member, "maxeventbytes")) {
+            *result = oasp_value_int((int64_t)openai->max_event_bytes);
+            return true;
+        }
+        if (oasp_ascii_equal(member, "maxbufferedbytes")) {
+            *result = oasp_value_int((int64_t)openai->max_buffered_bytes);
+            return true;
+        }
+        if (oasp_ascii_equal(member, "maxresponsebytes")) {
+            *result = oasp_value_int((int64_t)openai->max_response_bytes);
             return true;
         }
     }
@@ -193,6 +217,8 @@ bool oasp_builtin_component_call_id(oasp_runtime *runtime, oasp_object *object, 
          oasp_builtin_memcache_multi_call(runtime, object, member, arguments, argument_count, line, result)) ||
         (object->component_kind == OASP_COMPONENT_HTTP_MULTI &&
          oasp_builtin_http_multi_call(runtime, object, member, arguments, argument_count, line, result)) ||
+        (object->component_kind == OASP_COMPONENT_OPENAI_STREAM &&
+         oasp_builtin_openai_stream_call(runtime, object, member, argument_count, line, result)) ||
         ((object->component_kind == OASP_COMPONENT_HTTP || object->component_kind == OASP_COMPONENT_OPENAI) &&
          oasp_builtin_http_call(runtime, object, member, arguments, argument_count, line, result)) ||
         oasp_builtin_stream_call(runtime, object, member, arguments, argument_count, line, result) ||

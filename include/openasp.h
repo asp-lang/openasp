@@ -115,6 +115,7 @@ const char *oasp_request_method(const oasp_request *request);
  */
 int oasp_request_set_limits(oasp_request *request, const oasp_request_limits *limits);
 int oasp_request_deadline_expired(const oasp_request *request);
+long long oasp_request_deadline_milliseconds(const oasp_request *request);
 int oasp_request_failed(const oasp_request *request);
 const char *oasp_request_error(const oasp_request *request);
 size_t oasp_request_memory_usage(const oasp_request *request);

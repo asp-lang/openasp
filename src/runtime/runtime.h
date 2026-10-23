@@ -130,6 +130,7 @@ typedef enum {
     OASP_COMPONENT_JSON,
     OASP_COMPONENT_CRYPTO,
     OASP_COMPONENT_OPENAI,
+    OASP_COMPONENT_OPENAI_STREAM,
     OASP_COMPONENT_PROCESS,
     OASP_COMPONENT_WEBSOCKET,
     OASP_COMPONENT_MEMCACHE,
@@ -172,6 +173,7 @@ struct oasp_runtime {
     oasp_memory_manager *memory;
     oasp_gc_root *gc_roots;
     oasp_component_context *component_context;
+    void *external_request_contexts;
     oasp_fork_child *fork_children;
     /* Registered globals, routines, classes, active frame, and With receiver. */
     oasp_binding *variables;
@@ -242,6 +244,7 @@ char *oasp_runtime_copy(oasp_runtime *runtime, const char *data, size_t length);
 char *oasp_runtime_lower(oasp_runtime *runtime, const char *data, size_t length);
 bool oasp_runtime_defer(oasp_runtime *runtime, void *owner, oasp_finalizer_fn function, void *context);
 bool oasp_runtime_account_external(oasp_runtime *runtime, void *owner, ptrdiff_t delta);
+void oasp_runtime_note_external_pressure(oasp_runtime *runtime, size_t bytes);
 void oasp_runtime_write_barrier(oasp_runtime *runtime, void *owner, const oasp_value *value);
 oasp_value oasp_runtime_value_copy(oasp_runtime *runtime, const oasp_value *value, bool copy_text);
 bool oasp_runtime_register_fork_child(oasp_runtime *runtime, pid_t pid);
@@ -305,6 +308,7 @@ oasp_value oasp_runtime_call_name_view(oasp_runtime *runtime, const oasp_bytecod
 oasp_value oasp_runtime_get_member(oasp_runtime *runtime, const oasp_value *receiver, oasp_slice member, size_t line);
 oasp_value oasp_runtime_get_member_id(oasp_runtime *runtime, const oasp_value *receiver, uint16_t member_id, oasp_slice member, size_t line);
 oasp_value oasp_runtime_get_name_id(oasp_runtime *runtime, oasp_slice name, uint16_t member_id, size_t line);
+bool oasp_runtime_set_member(oasp_runtime *runtime, const oasp_value *receiver, oasp_slice member, const oasp_value *value, size_t line);
 oasp_value oasp_runtime_apply_unary(oasp_runtime *runtime, oasp_expr_kind kind, const oasp_value *operand, size_t line);
 oasp_value oasp_runtime_apply_binary(oasp_runtime *runtime, oasp_expr_kind kind, const oasp_value *left, const oasp_value *right, size_t line);
 

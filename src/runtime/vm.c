@@ -12,7 +12,6 @@
 
 #include "vm.h"
 
-#include "builtin_internal.h"
 #include "component.h"
 #include "debugger.h"
 #include "internal.h"
@@ -147,8 +146,6 @@ static oasp_recordset_ordinal_cache *oasp_vm_recordset_ordinal(oasp_runtime *run
 
 static bool oasp_vm_recordset_field_view(oasp_runtime *runtime, oasp_object *object, oasp_slice column, int *ordinal, const void **schema,
                                          bool *copy_text, size_t line, const oasp_value **result) {
-    if (object && object->component_kind == OASP_COMPONENT_ADO_RECORDSET)
-        return oasp_builtin_ado_recordset_field_view(runtime, object, column, ordinal, schema, copy_text, line, result);
     return oasp_component_recordset_field_view(runtime, object, column, ordinal, schema, copy_text, line, result);
 }
 

@@ -38,7 +38,7 @@
 | `VBScript.RegExp`、匹配、匹配/子匹配集合 | `component_local_members.asp` | `component_regexp_capture.asp`、`component_regexp_unicode_escape.asp` | `test_core.c` |
 | `ADODB.Stream` | `component_local_members.asp` | `component_stream_copy.asp` | `component_error_paths.asp` |
 | XML DOM、XML 节点、节点列表、解析错误 | `component_local_members.asp` | `component_dom.asp`、`component_xml_cdata.asp` | `test_core.c` |
-| HTTP/XMLHTTP 与 OpenAI 客户端 | `component_http.asp`、`component_backend_services.asp` | `component_https.asp` | `test_external_components.py` mock 失败路径 |
+| HTTP/XMLHTTP 与 OpenAI 客户端 | `component_http.asp`、`component_backend_services.asp` | `component_https.asp`、`component_openai_stream.asp` | `test_external_components.py` mock 失败路径 |
 | ADO Connection、Recordset、Command、Parameters | `component_mysql.asp`、`ado_sqlite.asp` | `ado_recordset_paging.asp`、`mysql_sliding_window.asp` | `component_mysql_empty_recordset.asp` |
 | `OpenASP.Socket` TCP/Unix/UDP/listener | `component_socket_client.asp` | `component_socket_listener.asp`、`component_socket_udp.asp` | `component_socket_error.asp` |
 | `OpenASP.Redis` | `component_redis.asp` | worker pool 检查 | `test_external_components.py` 的不可用端点检查 |

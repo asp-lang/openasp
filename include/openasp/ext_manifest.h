@@ -35,6 +35,13 @@ typedef struct oasp_external_module_config {
     size_t prog_id_count;
     uint64_t capabilities;
     oasp_external_mode mode;
+    size_t max_instances;
+    size_t max_message_bytes;
+    size_t max_external_bytes;
+    size_t max_worker_external_bytes;
+    size_t max_model_external_bytes;
+    size_t max_device_external_bytes;
+    unsigned long call_timeout_ms;
 } oasp_external_module_config;
 
 #endif
