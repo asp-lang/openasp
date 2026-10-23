@@ -175,6 +175,3 @@ Set output = model.Forward(ai.Tensor(Array(1, 2)).Reshape(Array(1, 2)))
 Response.Write cpu.Backend & "|" & parameters.Count & "|" & output.Item(0, 0)
 %>
 ```
-
-完整 API 和格式约束见 `../../docs/openasp.ai-design.md`，扩展加载与隔离配置见
-`../../docs/extensions.zh-CN.md`。

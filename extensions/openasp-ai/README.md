@@ -198,7 +198,3 @@ Set output = model.Forward(ai.Tensor(Array(1, 2)).Reshape(Array(1, 2)))
 Response.Write cpu.Backend & "|" & parameters.Count & "|" & output.Item(0, 0)
 %>
 ```
-
-See `../../docs/openasp.ai-design.md` for the complete API and format
-constraints. See `../../docs/extensions.md` for extension loading and isolation
-configuration.
