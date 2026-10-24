@@ -13,6 +13,7 @@
 <p align="center">
   <a href="#安装二进制发行包">安装</a> |
   <a href="#从源码编译">编译</a> |
+  <a href="#openaspai">OpenASP.AI</a> |
   <a href="#hello-world">Hello World</a> |
   <a href="#命令行工具">命令行工具</a> |
   <a href="#使用-nginx-部署">Nginx</a> |
@@ -45,23 +46,23 @@ OpenASP 发行包使用以下命名：
 
 | 平台 | 压缩包 |
 | --- | --- |
-| Linux x86-64 | [`openasp-0.2.0-linux-x86-64.tar.gz`](https://github.com/asp-lang/openasp/releases/download/v-0.2.0/openasp-0.2.0-linux-x86-64.tar.gz) |
-| MacOS Apple Silicon | [`openasp-0.2.0-macos-arm64.zip`](https://github.com/asp-lang/openasp/releases/download/v-0.2.0/openasp-0.2.0-macos-arm64.zip) |
+| Linux x86-64 | [`openasp-0.3.0-linux-x86-64.tar.gz`](https://github.com/asp-lang/openasp/releases/download/v-0.3.0/openasp-0.3.0-linux-x86-64.tar.gz) |
+| MacOS Apple Silicon | [`openasp-0.3.0-macos-arm64.zip`](https://github.com/asp-lang/openasp/releases/download/v-0.3.0/openasp-0.3.0-macos-arm64.zip) |
 
 从项目发布页面或 [https://asp-lang.org](https://asp-lang.org) 下载对应平台的压缩包，然后解压：
 
 ```sh
 # Linux x86-64
-tar -xzf openasp-0.2.0-linux-x86-64.tar.gz
+tar -xzf openasp-0.3.0-linux-x86-64.tar.gz
 
 # MacOS Apple Silicon
-unzip openasp-0.2.0-macos-arm64.zip
+unzip openasp-0.3.0-macos-arm64.zip
 ```
 
 每个发行包都在 `bin/` 中提供六个程序，包括隔离扩展使用的 `openasp-component-host`。核心扩展 SDK 位于 `include/`；OpenASP.AI 动态库、配置示例、文档及带命名空间的头文件统一位于 `extensions/openasp-ai/`。将 `bin/` 加入 `PATH` 并验证安装：
 
 ```sh
-export PATH="/path/to/openasp-0.2.0-linux-x86-64/bin:$PATH"
+export PATH="/path/to/openasp-0.3.0-linux-x86-64/bin:$PATH"
 openasp --help
 ```
 
@@ -102,7 +103,7 @@ make all
 make test
 ```
 
-五个可执行程序会写入 `build/bin/`。完整构建包含所有原生组件；精简构建只保留核心运行时、持久状态、SQLite、json-c 和 `Scripting.Dictionary`：
+六个可执行程序会写入 `build/bin/`。完整构建包含所有原生组件；精简构建只保留核心运行时、持久状态、SQLite、json-c 和 `Scripting.Dictionary`：
 
 ```sh
 make minimal
@@ -450,11 +451,62 @@ If profile.ErrorCode = 0 Then Response.Write profile.Value
 外部原生扩展可通过 Extension ABI v2 以进程内或隔离模式加载，详见
 [SDK 指南](docs/extensions.zh-CN.md)与[实现设计](docs/ext-design.zh-CN.md)。
 
-OpenASP.AI 以 C11 外部扩展形式位于
-[`extensions/openasp-ai`](extensions/openasp-ai/README.zh-CN.md)。执行 `make AI=1`
-可同时构建引擎和 reference CPU AI runtime，`make ai-test` 运行专项测试。该扩展包含
-Tensor 与训练 API、计算图编译、Transformer/KV Cache、异步执行、Profiler 及设计文档
-规定的模型持久化格式；加速器实现通过独立的 Backend ABI 1.1 插件提供。
+### OpenASP.AI
+
+OpenASP.AI 是一个基于 Extension ABI v2.1 的原生 C11 机器学习扩展，通过唯一可创建的
+ProgID `OpenASP.AI` 暴露给 ASP。它不依赖 Python runtime，Tensor、Module、Model、
+Device 等子对象均封装在请求级 AI context 中。
+
+该扩展提供：
+
+- Tensor 运算、view、dtype、广播、量化、卷积、归一化、Attention、采样和归约；
+- 动态 Autograd、模块、优化器、scheduler、loss scaling，以及包含融合
+  CrossEntropy 和 CTC 在内的常用训练损失函数；
+- Dataset、并行预取 DataLoader、Tokenizer、KV Cache、计算图执行、异步 Event、
+  执行计划缓存和 Profiler；
+- 原生 `.oaspweights`、`.oaspckpt`、`.oaspbundle`、`.oaspmodel` 持久化格式，
+  以及 ONNX 和 SafeTensors 互操作能力。
+
+内置 reference CPU 后端是正确性基线。可选 oneDNN 和 CUDA 后端通过 Backend ABI 1.4
+加载，ASP 模型无需修改。CUDA 后端支持 device-resident Tensor、stream/event、
+cuBLASLt、CUB、可选 cuDNN execution plan 和可选 NCCL collective。
+
+从源码构建并测试 OpenASP.AI：
+
+```sh
+make AI=1
+make ai-test
+```
+
+二进制发行包将动态库、配置示例、文档和头文件统一放在
+`extensions/openasp-ai/`。Linux 使用 `libopenasp_ai.so`，macOS 使用
+`libopenasp_ai.dylib`。在 `openasp-ai.yaml.example` 中配置动态库绝对路径及其小写
+SHA-256 摘要，然后通过 `-c` 将生成的配置文件传给 `openasp` 或 `openasp-fpm`。
+
+生产部署应使用 `mode: isolated`，确保动态库仅允许管理员写入，在 `bin/` 中保留与其他
+程序同级的 `openasp-component-host`，并启用 SHA-256 校验。可信且对延迟敏感的部署可
+显式选择 `in-process`。
+
+最小 ASP 示例：
+
+```asp
+<%
+Set ai = Server.CreateObject("OpenASP.AI")
+Set cpu = ai.GetDevice("cpu:0")
+
+Set model = ai.Sequential()
+Call model.Add(ai.Linear(2, 4))
+Call model.Add(ai.ReLULayer())
+Call model.Add(ai.Linear(4, 1))
+
+Set input = ai.Tensor(Array(1, 2)).Reshape(Array(1, 2))
+Set output = model.Forward(input)
+Response.Write cpu.Backend & "|" & output.Item(0, 0)
+%>
+```
+
+完整部署、后端、训练、持久化和 API 信息见
+[OpenASP.AI 指南](extensions/openasp-ai/README.zh-CN.md)。
 
 ## 架构与文档
 
@@ -477,7 +529,7 @@ ASP 模板和 include 会被解析并编译为经过校验的字节码。独立�
 
 ## 版本
 
-当前源码版本为 `0.2.0`，由 `src/cmd/version.h` 中的 `OPENASP_VERSION` 定义。
+当前源码版本为 `0.3.0`，由 `src/cmd/version.h` 中的 `OPENASP_VERSION` 定义。
 
 ## 更多尝试
 

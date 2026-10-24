@@ -17,6 +17,7 @@
   <a href="#command-line-tools">CLI Tools</a> |
   <a href="#deploy-with-nginx">Nginx</a> |
   <a href="#compatibility-and-components">Compatibility</a> |
+   <a href="#openaspai">OpenASP.AI</a> |
   <a href="https://asp-lang.org">Website</a> |
   <a href="README.zh-CN.md">Simplified Chinese</a>
 </p>
@@ -45,23 +46,23 @@ OpenASP release archives use the following names:
 
 | Platform | Archive |
 | --- | --- |
-| Linux x86-64 | [`openasp-0.2.0-linux-x86-64.tar.gz`](https://github.com/asp-lang/openasp/releases/download/v-0.2.0/openasp-0.2.0-linux-x86-64.tar.gz) |
-| MacOS Apple Silicon | [`openasp-0.2.0-macos-arm64.zip`](https://github.com/asp-lang/openasp/releases/download/v-0.2.0/openasp-0.2.0-macos-arm64.zip) |
+| Linux x86-64 | [`openasp-0.3.0-linux-x86-64.tar.gz`](https://github.com/asp-lang/openasp/releases/download/v-0.3.0/openasp-0.3.0-linux-x86-64.tar.gz) |
+| MacOS Apple Silicon | [`openasp-0.3.0-macos-arm64.zip`](https://github.com/asp-lang/openasp/releases/download/v-0.3.0/openasp-0.3.0-macos-arm64.zip) |
 
 Download the matching archive from the project release page or [https://asp-lang.org](https://asp-lang.org), then extract it:
 
 ```sh
 # Linux x86-64
-tar -xzf openasp-0.2.0-linux-x86-64.tar.gz
+tar -xzf openasp-0.3.0-linux-x86-64.tar.gz
 
 # MacOS Apple Silicon
-unzip openasp-0.2.0-macos-arm64.zip
+unzip openasp-0.3.0-macos-arm64.zip
 ```
 
 Each package contains six programs under `bin/`, including `openasp-component-host` for isolated extensions. The core extension SDK is under `include/`; the OpenASP.AI library, configuration example, documentation, and namespaced headers are under `extensions/openasp-ai/`. Add `bin/` to `PATH` and verify the installation:
 
 ```sh
-export PATH="/path/to/openasp-0.2.0-linux-x86-64/bin:$PATH"
+export PATH="/path/to/openasp-0.3.0-linux-x86-64/bin:$PATH"
 openasp --help
 ```
 
@@ -102,7 +103,7 @@ make all
 make test
 ```
 
-The five executables are written to `build/bin/`. The full profile includes all native components. A smaller profile keeps the core runtime, persistent state, SQLite, json-c, and `Scripting.Dictionary`:
+The six executables are written to `build/bin/`. The full profile includes all native components. A smaller profile keeps the core runtime, persistent state, SQLite, json-c, and `Scripting.Dictionary`:
 
 ```sh
 make minimal
@@ -454,13 +455,67 @@ External native extensions can be loaded through Extension ABI v2 in either
 in-process or isolated mode. See [the SDK guide](docs/extensions.md) and
 [implementation design](docs/ext-design.md).
 
-OpenASP.AI is provided as the C11 extension under
-[`extensions/openasp-ai`](extensions/openasp-ai/README.md). Build the engine and
-the reference CPU AI runtime with `make AI=1`, then run its focused suite with
-`make ai-test`. It includes Tensor and training APIs, graph compilation,
-Transformer/KV-cache primitives, asynchronous execution, profiling, and the
-documented model persistence formats. Accelerator implementations remain
-separate Backend ABI 1.1 plugins.
+### OpenASP.AI
+
+OpenASP.AI is a native C11 machine-learning extension built on Extension ABI
+v2.1 and exposed to ASP as the single creatable ProgID `OpenASP.AI`. It runs
+without a Python runtime and keeps Tensor, Module, Model, Device, and other
+child objects inside a request-scoped AI context.
+
+The extension provides:
+
+- Tensor operations, views, dtypes, broadcasting, quantization, convolution,
+  normalization, Attention, sampling, and reductions.
+- Dynamic Autograd, modules, optimizers, schedulers, loss scaling, and common
+  training losses including fused CrossEntropy and CTC.
+- Dataset, parallel-prefetch DataLoader, Tokenizer, KV Cache, graph execution,
+  asynchronous events, execution-plan caching, and profiling.
+- Native `.oaspweights`, `.oaspckpt`, `.oaspbundle`, and `.oaspmodel`
+  persistence, plus ONNX and SafeTensors interoperability.
+
+The built-in reference CPU backend is the correctness baseline. Optional
+oneDNN and CUDA backends load through Backend ABI 1.4 without changing ASP
+models. The CUDA backend supports device-resident tensors, streams and events,
+cuBLASLt, CUB, optional cuDNN execution plans, and optional NCCL collectives.
+
+Build and test OpenASP.AI from source:
+
+```sh
+make AI=1
+make ai-test
+```
+
+Binary packages place the shared library, configuration example, documentation,
+and headers under `extensions/openasp-ai/`. Linux uses `libopenasp_ai.so`;
+macOS uses `libopenasp_ai.dylib`. Configure an absolute library path and its
+lowercase SHA-256 digest in `openasp-ai.yaml.example`, then pass the resulting
+file to `openasp` or `openasp-fpm` with `-c`.
+
+Production deployments should use `mode: isolated`, keep the library
+administrator-writable only, retain `openasp-component-host` beside the other
+programs in `bin/`, and enable SHA-256 verification. Trusted,
+latency-sensitive deployments may explicitly select `in-process`.
+
+Minimal ASP example:
+
+```asp
+<%
+Set ai = Server.CreateObject("OpenASP.AI")
+Set cpu = ai.GetDevice("cpu:0")
+
+Set model = ai.Sequential()
+Call model.Add(ai.Linear(2, 4))
+Call model.Add(ai.ReLULayer())
+Call model.Add(ai.Linear(4, 1))
+
+Set input = ai.Tensor(Array(1, 2)).Reshape(Array(1, 2))
+Set output = model.Forward(input)
+Response.Write cpu.Backend & "|" & output.Item(0, 0)
+%>
+```
+
+See the [OpenASP.AI guide](extensions/openasp-ai/README.md) for complete
+deployment, backend, training, persistence, and API information.
 
 ## Architecture and Documentation
 
@@ -483,7 +538,7 @@ ASP templates and includes are parsed and compiled into validated bytecode. Stan
 
 ## Version
 
-The current source version is `0.2.0`, defined by `OPENASP_VERSION` in `src/cmd/version.h`.
+The current source version is `0.3.0`, defined by `OPENASP_VERSION` in `src/cmd/version.h`.
 
 ## More to Try
 
