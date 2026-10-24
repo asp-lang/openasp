@@ -4,7 +4,7 @@ external-components:
   require-sha256: on
   modules:
     - id: openasp-ai
-      library: /usr/local/lib/openasp/libopenasp_ai.dylib
+      library: REPLACE_WITH_ABSOLUTE_LIBRARY_PATH
       mode: isolated
       sha256: REPLACE_WITH_LOWERCASE_SHA256
       capabilities:

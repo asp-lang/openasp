@@ -55,9 +55,9 @@ package_local() {
     output="$ROOT/release/$archive_base.$extension"
 
     rm -rf "$work" "$stage"
-    mkdir -p "$ROOT/release" "$stage/assets" "$stage/bin" "$stage/docs" \
-        "$stage/examples/extensions/acme_math" "$stage/extensions/openasp-ai" \
-        "$stage/include/openasp" "$stage/lib/openasp"
+    mkdir -p "$ROOT/release" "$stage/assets" "$stage/bin" \
+        "$stage/examples/extensions/acme_math" "$stage/extensions/openasp-ai/include/openasp" \
+        "$stage/include/openasp"
 
     make -C "$ROOT" BUILD="$work" clean
     make -C "$ROOT" BUILD="$work" AI=1 all
@@ -69,8 +69,6 @@ package_local() {
     cp "$ROOT/README.md" "$stage/README.md"
     cp "$ROOT/README.zh-CN.md" "$stage/README.zh-CN.md"
     cp -R "$ROOT/assets/." "$stage/assets/"
-    cp "$ROOT/docs/extensions.md" "$ROOT/docs/extensions.zh-CN.md" \
-        "$ROOT/docs/openasp.ai-design.md" "$stage/docs/"
     cp "$ROOT/examples/openasp-fpm.yaml" "$stage/examples/openasp-fpm.yaml"
     cp "$ROOT/examples/extensions/acme_math/Makefile" \
         "$ROOT/examples/extensions/acme_math/acme_math.c" \
@@ -79,15 +77,15 @@ package_local() {
     cp -R "$ROOT/include/." "$stage/include/"
     cp "$ROOT/extensions/openasp-ai/include/openasp/ai.h" \
         "$ROOT/extensions/openasp-ai/include/openasp/ai_backend.h" \
-        "$stage/include/openasp/"
+        "$stage/extensions/openasp-ai/include/openasp/"
     cp "$ROOT/extensions/openasp-ai/README.md" \
         "$ROOT/extensions/openasp-ai/README.zh-CN.md" \
         "$ROOT/extensions/openasp-ai/openasp-ai.yaml.example" \
         "$stage/extensions/openasp-ai/"
     if [ "$platform" = "linux" ]; then
-        cp "$ROOT/extensions/openasp-ai/libopenasp_ai.so" "$stage/lib/openasp/"
+        cp "$ROOT/extensions/openasp-ai/libopenasp_ai.so" "$stage/extensions/openasp-ai/"
     else
-        cp "$ROOT/extensions/openasp-ai/libopenasp_ai.dylib" "$stage/lib/openasp/"
+        cp "$ROOT/extensions/openasp-ai/libopenasp_ai.dylib" "$stage/extensions/openasp-ai/"
     fi
 
     rm -f "$output"

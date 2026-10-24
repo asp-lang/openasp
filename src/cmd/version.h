@@ -15,9 +15,9 @@
 #include <stdio.h>
 
 #define OPENASP_VERSION_MAJOR 0
-#define OPENASP_VERSION_MINOR 2
+#define OPENASP_VERSION_MINOR 3
 #define OPENASP_VERSION_PATCH 0
-#define OPENASP_VERSION "0.2.0"
+#define OPENASP_VERSION "0.3.0"
 
 #if defined(__APPLE__)
 #define OPENASP_PLATFORM_OS "MacOS"

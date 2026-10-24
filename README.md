@@ -58,7 +58,7 @@ tar -xzf openasp-0.2.0-linux-x86-64.tar.gz
 unzip openasp-0.2.0-macos-arm64.zip
 ```
 
-Each package contains six programs under `bin/`, including `openasp-component-host` for isolated extensions, the public extension headers under `include/`, and example configurations. Add `bin/` to `PATH` and verify the installation:
+Each package contains six programs under `bin/`, including `openasp-component-host` for isolated extensions. The core extension SDK is under `include/`; the OpenASP.AI library, configuration example, documentation, and namespaced headers are under `extensions/openasp-ai/`. Add `bin/` to `PATH` and verify the installation:
 
 ```sh
 export PATH="/path/to/openasp-0.2.0-linux-x86-64/bin:$PATH"

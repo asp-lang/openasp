@@ -58,7 +58,7 @@ tar -xzf openasp-0.2.0-linux-x86-64.tar.gz
 unzip openasp-0.2.0-macos-arm64.zip
 ```
 
-每个发行包都在 `bin/` 中提供六个程序（包括隔离扩展使用的 `openasp-component-host`），在 `include/` 中提供公开扩展头文件，并附带示例配置。将 `bin/` 加入 `PATH` 并验证安装：
+每个发行包都在 `bin/` 中提供六个程序，包括隔离扩展使用的 `openasp-component-host`。核心扩展 SDK 位于 `include/`；OpenASP.AI 动态库、配置示例、文档及带命名空间的头文件统一位于 `extensions/openasp-ai/`。将 `bin/` 加入 `PATH` 并验证安装：
 
 ```sh
 export PATH="/path/to/openasp-0.2.0-linux-x86-64/bin:$PATH"
